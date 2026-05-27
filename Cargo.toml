@@ -1,0 +1,19 @@
+[package]
+name = "client"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+iced = { version = "0.13", features = ["tokio", "advanced","image"] }
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "uuid"] }
+shared = { path = "../shared" }
+tokio-tungstenite = "0.21"
+url = "2.5"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde_json = "1.0"
+futures-util = "0.3"
+image = "0.25"
