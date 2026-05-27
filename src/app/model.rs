@@ -73,7 +73,7 @@ impl Model {
                 if !self.state.peer_keys.contains_key(&t) { 
                     let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t)); 
                 }
-                Task::none()
+                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
             }
             OpenNewChatScreen => { 
                 self.state.screen = crate::state::Screen::NewChat { input: String::new() }; 
