@@ -15,18 +15,30 @@ AnonPeer-client — это кроссплатформенное настольн
 
 ## Структура проекта
 
-src/  
-├── main.rs           # Точка входа приложения  
-├── state.rs          # Управление состоянием и базой данных  
-├── network.rs        # Сетевой слой и WebSocket  
-└── app/  
-    ├── mod.rs        # Инициализация UI  
-    ├── model.rs      # Model в архитектуре Elm  
-    ├── message.rs    # UiMessage enum  
-    ├── ui/           # Компоненты интерфейса  
-    ├── component/    # Переиспользуемые компоненты  
-    └── theme/        # Цветовая схема и стили  
-
+├── app
+│   ├── component
+│   │   ├── input.rs
+│   │   ├── message.rs
+│   │   ├── mod.rs
+│   │   └── sidebar.rs
+│   ├── message.rs
+│   ├── model.rs
+│   ├── mod.rs
+│   ├── theme
+│   │   ├── colors.rs
+│   │   ├── mod.rs
+│   │   └── styles.rs
+│   ├── ui
+│   │   ├── layout.rs
+│   │   ├── mod.rs
+│   │   └── screens
+│   │       ├── mod.rs
+│   │       └── windows.rs
+│   └── windows.rs
+├── ico.png
+├── main.rs
+├── network.rs
+└── state.rs
 
 ## 🚀 Установка
 
