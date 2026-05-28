@@ -35,7 +35,7 @@ AnonPeer-client — это кроссплатформенное настольн
 │   │       ├── mod.rs
 │   │       └── windows.rs
 │   └── windows.rs
-├── ico.png
+├── ico.ico
 ├── main.rs
 ├── network.rs
 └── state.rs
