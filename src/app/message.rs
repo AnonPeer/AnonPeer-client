@@ -24,4 +24,7 @@ pub enum UiMessage {
 
     FetchKeysFor(String),
     KeysReceived { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },
+    ToggleTheme,
+    ToggleHamburgerMenu,
+    ToggleSettings,
 }

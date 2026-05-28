@@ -3,7 +3,7 @@ use iced::{Alignment, Element, Length};
 use crate::app::model::Model;
 use crate::app::message::UiMessage;
 use crate::app::theme::styles;
-use crate::app::component::{sidebar, input, message as message_comp};
+use crate::app::component::sidebar;
 use crate::state::Screen;
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
@@ -16,25 +16,203 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 }
 
+
+
 fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
-    let sb = sidebar::view(
+    // === 1. Sidebar ===
+    let sidebar = sidebar::view(
         model.state.username.as_ref(),
         &model.state.chats,
         model.selected_chat.as_ref(),
     );
+
+    // === 2. Бургер ===
+    let hamburger_icon = column![
+        container(horizontal_rule(2)).width(18).height(2),
+        container(horizontal_rule(2)).width(18).height(2),
+        container(horizontal_rule(2)).width(18).height(2),
+    ]
+    .spacing(4)
+    .align_x(Alignment::Center);
+
+    let hamburger_button = button(hamburger_icon)
+        .padding(10)
+        .style(styles::surface_button())
+        .on_press(UiMessage::ToggleHamburgerMenu);
+
+    let burger_panel = column![hamburger_button]
+        .width(Length::Fixed(60.0))
+        .align_x(Alignment::Center);
+
+    // === 3. Drawer (ключевая часть!) ===
+    let drawer_width = if model.hamburger_open {
+        240.0
+    } else {
+        0.0
+    };
+
+    let drawer = container(
+        if model.hamburger_open {
+            view_hamburger_panel(model)
+        } else {
+            column![].into()
+        }
+    )
+    .width(Length::Fixed(drawer_width))
+    .height(Length::Fill);
+
+    // === 4. Top bar ===
+    let top_bar = row![Space::with_width(Length::Fill)]
+        .padding([8, 12])
+        .height(Length::Fixed(44.0));
+
+    // === 5. Content ===
     let content = match &model.state.screen {
         Screen::ChatView { target, input } => {
             view_chat_view(model, target.as_str(), input.as_str())
         }
-        Screen::NewChat { input } => view_new_chat(model, input.as_str()),
+        Screen::NewChat { input } => {
+            view_new_chat(model, input.as_str())
+        }
         _ => view_empty(),
     };
-    iced::widget::row![sb, content].height(Length::Fill).into()
+
+    let main_area = column![top_bar, content]
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    // === 6. Главный layout ===
+    let base_layout: Element<'a, UiMessage> =
+        row![burger_panel, drawer, sidebar, main_area]
+            .height(Length::Fill)
+            .into();
+
+    // === 7. Настройки overlay ===
+    if model.show_settings {
+        let dimmer = button(row![])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_, _| iced::widget::button::Style {
+                background: Some(
+                    iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()
+                ),
+                ..Default::default()
+            })
+            .on_press(UiMessage::ToggleSettings);
+
+        let bottom_panel = container(view_settings_content())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_y(Alignment::End);
+
+        iced::widget::stack![
+            base_layout,
+            dimmer,
+            bottom_panel
+        ]
+        .into()
+    } else {
+        base_layout
+    }
 }
 
+
+
+fn view_hamburger_panel<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+    container(
+        column![
+            text("Меню").size(18).style(styles::muted_text()),
+            horizontal_rule(1),
+            Space::with_height(12),
+
+            
+            Space::with_height(6),
+            button(text("☀️/🌙 Сменить тему").size(14))
+                .width(Length::Fill).padding([10, 12]).style(styles::surface_button())
+                .on_press(UiMessage::ToggleTheme),
+            Space::with_height(Length::Fill),
+            button(text("⚙️ Настройки").size(14))
+                .width(Length::Fill).padding([10, 12]).style(styles::surface_button())
+                .on_press(UiMessage::ToggleSettings),
+        ].spacing(8).padding(16)
+    )
+    .width(Length::Fixed(240.0))
+    .height(Length::Fill)
+    .style(styles::sidebar_container())
+    .into()
+}
+
+
+fn view_settings_content<'a>() -> Element<'a, UiMessage> {
+    let content = container(
+        column![
+            // Header
+            container(row![
+                text("Настройки").size(20).style(styles::muted_text()),
+                Space::with_width(Length::Fill),
+                button(text("✕").size(16))
+                    .padding(8)
+                    .style(styles::surface_button())
+                    .on_press(UiMessage::ToggleSettings)
+            ])
+            .width(Length::Fill)
+            .padding([16, 20]),
+
+            horizontal_rule(1),
+
+            // Options
+            column![
+                button(text("🔔 Уведомления").size(14))
+                    .width(Length::Fill)
+                    .padding(12)
+                    .style(styles::surface_button()),
+
+                button(text("🔐 Конфиденциальность").size(14))
+                    .width(Length::Fill)
+                    .padding(12)
+                    .style(styles::surface_button()),
+
+                button(text("💾 Данные и память").size(14))
+                    .width(Length::Fill)
+                    .padding(12)
+                    .style(styles::surface_button()),
+
+                button(text("Выйти").size(14))
+                    .width(Length::Fill)
+                    .padding(12)
+                    .style(styles::surface_button())
+                    .on_press(UiMessage::Logout)   
+            ]
+            .spacing(8)
+            .padding([12, 20])
+        ]
+        .spacing(0)
+        .width(Length::Fill)
+    )
+    // 🔥 ширина больше
+    .width(Length::Fill)
+    .max_width(600.0)
+
+    // 🔥 высота больше
+    .height(Length::Fill)
+    .max_height(500.0)
+
+    .style(styles::bg_container());
+
+    // центрирование
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into()
+}
+
+
+
 fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
-    const ICON_BYTES: &[u8] = include_bytes!("../../../ico.png");
-    let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(64.0)).height(Length::Fixed(64.0));
+    const ICON_BYTES: &[u8] = include_bytes!("../../../ico.ico");
+    let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(128.0)).height(Length::Fixed(128.0));
     container(column![logo, Space::with_height(10), text("AnonPeer").size(32), text("Децентрализованный анонимный мессенджер").size(13).style(styles::muted_text()), Space::with_height(30), button(text("Вход в систему").size(14)).width(Length::Fill).padding(12).style(styles::accent_button()).on_press(UiMessage::MainMenuSelect(0)), Space::with_height(10), button(text("Создать новый аккаунт").size(14)).width(Length::Fill).padding(12).style(styles::surface_button()).on_press(UiMessage::MainMenuSelect(1))].align_x(Alignment::Center).max_width(320)).width(Length::Fill).height(Length::Fill).center_x(Length::Fill).center_y(Length::Fill).into()
 }
 
@@ -85,6 +263,11 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
         )
     ].height(Length::Fill).into()
 }
+
+
+
+
+
 
 fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage> {
     container(column![text("Создать секретный диалог").size(18), Space::with_height(14), text_input("Введите точный логин пользователя...", input).on_input(UiMessage::NewChatInputChanged).on_submit(UiMessage::NewChatSubmit).padding(12), Space::with_height(16), row![button(text("Отмена").size(13)).padding([8,16]).on_press(UiMessage::NewChatCancel), Space::with_width(Length::Fill), button(text("Открыть чат").size(13)).padding([8,16]).style(styles::accent_button()).on_press(UiMessage::NewChatSubmit)]].max_width(400).spacing(4)).width(Length::Fill).height(Length::Fill).center_x(Length::Fill).center_y(Length::Fill).into()

@@ -12,6 +12,9 @@ pub struct Model {
     pub password_visible: bool,
     pub selected_chat: Option<String>,
     pub scroll_id: scrollable::Id,
+    pub hamburger_open: bool,
+    pub is_light_theme: bool,
+    pub show_settings: bool,
 }
 
 impl Model {
@@ -23,6 +26,9 @@ impl Model {
             password_visible: false, 
             selected_chat: None,
             scroll_id: scrollable::Id::new("chat_scroll"),
+            hamburger_open: false,
+            is_light_theme: false,
+            show_settings: false,
         }
     }
 
@@ -115,6 +121,26 @@ impl Model {
                 self.state.cache_peer_keys(target, ed_public, x25519_public); 
                 Task::none() 
             }
+
+            ToggleHamburgerMenu => {
+                self.hamburger_open = !self.hamburger_open;
+                if self.hamburger_open { self.show_settings = false; }
+                Task::none()
+            }
+
+            ToggleTheme => {
+                self.is_light_theme = !self.is_light_theme;
+                Task::none()
+            }
+
+
+            ToggleSettings => {
+                self.show_settings = !self.show_settings;
+                if self.show_settings { self.hamburger_open = false; } 
+                Task::none()
+            }
+
+
         }
     }
 

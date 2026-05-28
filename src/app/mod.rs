@@ -16,6 +16,6 @@ pub fn run(app: AppState, rx: mpsc::UnboundedReceiver<ServerEvent>, cmd_tx: mpsc
     application("AnonPeer", Model::update, ui::layout::view)
         .window(window_settings)
         .subscription(|model: &Model| model.subscription())
-        .theme(|_| Theme::Dark)
+        .theme(|model: &Model| if model.is_light_theme { Theme::Light } else { Theme::Dark })
         .run_with(move || (Model::new(app, rx, cmd_tx), Task::none()))
 }

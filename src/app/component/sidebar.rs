@@ -19,10 +19,6 @@ pub fn view<'a>(
                 text("online").size(11).style(styles::muted_text())
             ],
             Space::with_width(Length::Fill),
-            button(text("Выйти").size(12))
-                .padding([6, 12])
-                .style(styles::surface_button())
-                .on_press(UiMessage::Logout)
         ].align_y(Alignment::Center)
     );
 
