@@ -19,14 +19,12 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
 
 
 fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
-    // === 1. Sidebar ===
     let sidebar = sidebar::view(
         model.state.username.as_ref(),
         &model.state.chats,
         model.selected_chat.as_ref(),
     );
-
-    // === 2. Бургер ===
+    
     let hamburger_icon = column![
         container(horizontal_rule(2)).width(18).height(2),
         container(horizontal_rule(2)).width(18).height(2),
@@ -44,7 +42,6 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .width(Length::Fixed(60.0))
         .align_x(Alignment::Center);
 
-    // === 3. Drawer (ключевая часть!) ===
     let drawer_width = if model.hamburger_open {
         240.0
     } else {
@@ -61,12 +58,10 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     .width(Length::Fixed(drawer_width))
     .height(Length::Fill);
 
-    // === 4. Top bar ===
     let top_bar = row![Space::with_width(Length::Fill)]
         .padding([8, 12])
         .height(Length::Fixed(44.0));
 
-    // === 5. Content ===
     let content = match &model.state.screen {
         Screen::ChatView { target, input } => {
             view_chat_view(model, target.as_str(), input.as_str())
@@ -81,13 +76,11 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    // === 6. Главный layout ===
     let base_layout: Element<'a, UiMessage> =
         row![burger_panel, drawer, sidebar, main_area]
             .height(Length::Fill)
             .into();
 
-    // === 7. Настройки overlay ===
     if model.show_settings {
         let dimmer = button(row![])
             .width(Length::Fill)
@@ -116,16 +109,12 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 }
 
-
-
 fn view_hamburger_panel<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     container(
         column![
             text("Меню").size(18).style(styles::muted_text()),
             horizontal_rule(1),
             Space::with_height(12),
-
-            
             Space::with_height(6),
             button(text("☀️/🌙 Сменить тему").size(14))
                 .width(Length::Fill).padding([10, 12]).style(styles::surface_button())
@@ -141,7 +130,6 @@ fn view_hamburger_panel<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     .style(styles::sidebar_container())
     .into()
 }
-
 
 fn view_settings_content<'a>() -> Element<'a, UiMessage> {
     let content = container(
@@ -160,7 +148,6 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
 
             horizontal_rule(1),
 
-            // Options
             column![
                 button(text("🔔 Уведомления").size(14))
                     .width(Length::Fill)
@@ -189,17 +176,14 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
         .spacing(0)
         .width(Length::Fill)
     )
-    // 🔥 ширина больше
     .width(Length::Fill)
     .max_width(600.0)
 
-    // 🔥 высота больше
     .height(Length::Fill)
     .max_height(500.0)
 
     .style(styles::bg_container());
 
-    // центрирование
     container(content)
         .width(Length::Fill)
         .height(Length::Fill)
