@@ -12,9 +12,9 @@ mod app;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().init();
     let db_path = env::var("ANON_DB").unwrap_or_else(|_| "./anon.db".into());
-    let ws_url = env::var("ANON_SERVER").unwrap_or_else(|_| "ws://127.0.0.1:8080/ws".into());
 
     let app = AppState::new(&db_path).await?;
+    let ws_url = app.server_address.clone();
     let (tx, rx) = mpsc::unbounded_channel::<ServerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<ClientCommand>();
 
