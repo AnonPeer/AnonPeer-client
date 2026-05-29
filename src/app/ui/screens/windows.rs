@@ -145,7 +145,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
             horizontal_rule(1),
 
             column![
-                text("Адрес WS сервера").size(12).style(styles::muted_text()),
+                text("Адрес WS сервера (Шифруется в базу)").size(12).style(styles::muted_text()),
                 text_input("ws://ip:port/ws", &model.state.server_address)
                     .on_input(UiMessage::ServerAddressChanged)
                     .padding(10),
@@ -193,7 +193,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .into()
 }
 
-fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
+fn view_welcome<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     const ICON_BYTES: &[u8] = include_bytes!("../../../ico.ico");
     let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(128.0)).height(Length::Fixed(128.0));
     
