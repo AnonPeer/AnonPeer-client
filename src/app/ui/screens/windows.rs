@@ -152,7 +152,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
             .padding([16, 20]),
             horizontal_rule(1),
             column![
-                text("Адрес WS сервера (Шифруется в базу)").size(12).style(styles::muted_text()),
+                text("Адрес WS сервера").size(12).style(styles::muted_text()),
                 text_input("ws://ip:port/ws", &model.state.server_address)
                     .on_input(UiMessage::ServerAddressChanged)
                     .padding(10),
