@@ -7,12 +7,39 @@ use crate::app::component::sidebar;
 use crate::state::Screen;
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
-    match &model.state.screen {
+    let base_layout = match &model.state.screen {
         Screen::MainMenu { .. } => view_welcome(model),
         Screen::AuthForm { is_register, username, password, .. } => {
             view_auth(model, *is_register, username.as_str(), password.as_str())
         }
         _ => view_app_shell(model),
+    };
+
+    if model.show_settings {
+        let dimmer = button(row![])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_, _| iced::widget::button::Style {
+                background: Some(
+                    iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()
+                ),
+                ..Default::default()
+            })
+            .on_press(UiMessage::ToggleSettings);
+
+        let bottom_panel = container(view_settings_content(model))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_y(Alignment::End);
+
+        iced::widget::stack![
+            base_layout,
+            dimmer,
+            bottom_panel
+        ]
+        .into()
+    } else {
+        base_layout
     }
 }
 
@@ -74,40 +101,11 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let base_layout: Element<'a, UiMessage> =
-        row![burger_panel, drawer, sidebar, main_area]
-            .height(Length::Fill)
-            .into();
-
-    if model.show_settings {
-        let dimmer = button(row![])
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(|_, _| iced::widget::button::Style {
-                background: Some(
-                    iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()
-                ),
-                ..Default::default()
-            })
-            .on_press(UiMessage::ToggleSettings);
-
-        let bottom_panel = container(view_settings_content())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_y(Alignment::End);
-
-        iced::widget::stack![
-            base_layout,
-            dimmer,
-            bottom_panel
-        ]
+    row![burger_panel, drawer, sidebar, main_area]
+        .height(Length::Fill)
         .into()
-    } else {
-        base_layout
-    }
 }
 
-// ИСПРАВЛЕНО: добавлено подчёркивание к имени переменной `_model`
 fn view_hamburger_panel<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     container(
         column![
@@ -130,10 +128,9 @@ fn view_hamburger_panel<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     .into()
 }
 
-fn view_settings_content<'a>() -> Element<'a, UiMessage> {
+fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     let content = container(
         column![
-            // Header
             container(row![
                 text("Настройки").size(20).style(styles::muted_text()),
                 Space::with_width(Length::Fill),
@@ -148,6 +145,13 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
             horizontal_rule(1),
 
             column![
+                text("Адрес WS сервера").size(12).style(styles::muted_text()),
+                text_input("ws://ip:port/ws", &model.state.server_address)
+                    .on_input(UiMessage::ServerAddressChanged)
+                    .padding(10),
+
+                Space::with_height(10),
+
                 button(text("🔔 Уведомления").size(14))
                     .width(Length::Fill)
                     .padding(12)
@@ -177,10 +181,8 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
     )
     .width(Length::Fill)
     .max_width(600.0)
-
     .height(Length::Fill)
     .max_height(500.0)
-
     .style(styles::bg_container());
 
     container(content)
@@ -194,7 +196,42 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
 fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     const ICON_BYTES: &[u8] = include_bytes!("../../../ico.ico");
     let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(128.0)).height(Length::Fixed(128.0));
-    container(column![logo, Space::with_height(10), text("AnonPeer").size(32), text("Децентрализованный анонимный мессенджер").size(13).style(styles::muted_text()), Space::with_height(30), button(text("Вход в систему").size(14)).width(Length::Fill).padding(12).style(styles::accent_button()).on_press(UiMessage::MainMenuSelect(0)), Space::with_height(10), button(text("Создать новый аккаунт").size(14)).width(Length::Fill).padding(12).style(styles::surface_button()).on_press(UiMessage::MainMenuSelect(1))].align_x(Alignment::Center).max_width(320)).width(Length::Fill).height(Length::Fill).center_x(Length::Fill).center_y(Length::Fill).into()
+    
+    let main_content = column![
+        logo, 
+        Space::with_height(10), 
+        text("AnonPeer").size(32), 
+        text("Децентрализованный анонимный мессенджер").size(13).style(styles::muted_text()), 
+        Space::with_height(30), 
+        button(text("Вход в систему").size(14)).width(Length::Fill).padding(12).style(styles::accent_button()).on_press(UiMessage::MainMenuSelect(0)), 
+        Space::with_height(10), 
+        button(text("Создать новый аккаунт").size(14)).width(Length::Fill).padding(12).style(styles::surface_button()).on_press(UiMessage::MainMenuSelect(1))
+    ]
+    .align_x(Alignment::Center)
+    .max_width(320);
+
+    let settings_button = button(text("⚙️ Настройки сервера").size(13))
+        .padding([8, 14])
+        .style(styles::surface_button())
+        .on_press(UiMessage::ToggleSettings);
+
+    let footer_row = row![
+        Space::with_width(Length::Fill),
+        settings_button
+    ]
+    .padding(20);
+
+    column![
+        container(main_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+        footer_row
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -> Element<'a, UiMessage> {
