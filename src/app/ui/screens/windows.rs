@@ -16,8 +16,6 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 }
 
-
-
 fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     let sidebar = sidebar::view(
         model.state.username.as_ref(),
@@ -109,7 +107,8 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 }
 
-fn view_hamburger_panel<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+// ИСПРАВЛЕНО: добавлено подчёркивание к имени переменной `_model`
+fn view_hamburger_panel<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     container(
         column![
             text("Меню").size(18).style(styles::muted_text()),
@@ -192,8 +191,6 @@ fn view_settings_content<'a>() -> Element<'a, UiMessage> {
         .into()
 }
 
-
-
 fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     const ICON_BYTES: &[u8] = include_bytes!("../../../ico.ico");
     let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(128.0)).height(Length::Fixed(128.0));
@@ -247,11 +244,6 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
         )
     ].height(Length::Fill).into()
 }
-
-
-
-
-
 
 fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage> {
     container(column![text("Создать секретный диалог").size(18), Space::with_height(14), text_input("Введите точный логин пользователя...", input).on_input(UiMessage::NewChatInputChanged).on_submit(UiMessage::NewChatSubmit).padding(12), Space::with_height(16), row![button(text("Отмена").size(13)).padding([8,16]).on_press(UiMessage::NewChatCancel), Space::with_width(Length::Fill), button(text("Открыть чат").size(13)).padding([8,16]).style(styles::accent_button()).on_press(UiMessage::NewChatSubmit)]].max_width(400).spacing(4)).width(Length::Fill).height(Length::Fill).center_x(Length::Fill).center_y(Length::Fill).into()
