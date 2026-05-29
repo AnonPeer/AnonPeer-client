@@ -121,21 +121,30 @@ impl Model {
                 self.state.cache_peer_keys(target, ed_public, x25519_public); 
                 Task::none() 
             }
-
             ToggleHamburgerMenu => {
                 self.hamburger_open = !self.hamburger_open;
                 if self.hamburger_open { self.show_settings = false; }
                 Task::none()
             }
-
             ToggleTheme => {
                 self.is_light_theme = !self.is_light_theme;
                 Task::none()
             }
-
             ToggleSettings => {
                 self.show_settings = !self.show_settings;
                 if self.show_settings { self.hamburger_open = false; } 
+                Task::none()
+            }
+            ServerAddressChanged(v) => {
+                self.state.server_address = v;
+                Task::done(SaveServerAddress)
+            }
+            SaveServerAddress => {
+                let current_state = self.state.clone();
+                let address = self.state.server_address.clone();
+                tokio::spawn(async move {
+                    let _ = current_state.save_server_address(&address).await;
+                });
                 Task::none()
             }
         }
@@ -243,7 +252,6 @@ impl Model {
                 if let Some(user) = &self.state.username {
                     if let Ok(chat_key) = self.state.get_chat_key(target) {
                         let pt = input.as_bytes();
-                        // ИСПРАВЛЕНО: Извлекаем eph_public вместо игнорирования `_`
                         if let Ok((ct, nonce, sig, eph_public)) = shared::crypto::encrypt_sign(
                             pt, 
                             &chat_key, 
@@ -258,7 +266,7 @@ impl Model {
                                 nonce, 
                                 signature: sig, 
                                 salt: vec![],
-                                ephemeral_public: eph_public, // ИСПРАВЛЕНО: передаем недостающее поле
+                                ephemeral_public: eph_public,
                             };
                             self.state.messages.push(msg.clone());
                             let db = self.state.clone(); 

@@ -27,4 +27,6 @@ pub enum UiMessage {
     ToggleTheme,
     ToggleHamburgerMenu,
     ToggleSettings,
+    ServerAddressChanged(String),
+    SaveServerAddress,
 }
