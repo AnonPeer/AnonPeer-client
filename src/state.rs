@@ -37,6 +37,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub peer_keys: HashMap<String, PeerKeys>,
     pub peer_public_keys: std::collections::HashMap<String, Vec<u8>>,
+    pub server_address: String,
 }
 
 impl AppState {
@@ -49,6 +50,8 @@ impl AppState {
         sqlx::query("CREATE TABLE IF NOT EXISTS local_keys (id INTEGER PRIMARY KEY, ed_secret BLOB, ed_public BLOB, x25519_secret BLOB, x25519_public BLOB)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
         sqlx::query("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, json TEXT)")
+            .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+        sqlx::query("CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, ciphertext BLOB, nonce BLOB, signature BLOB)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
 
         let row: Option<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
@@ -66,6 +69,19 @@ impl AppState {
             }
         };
 
+        let mut server_address = std::env::var("ANON_SERVER").unwrap_or_else(|_| "ws://127.0.0.1:8080/ws".into());
+        let config_row: Option<(Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
+            "SELECT ciphertext, nonce, signature FROM config WHERE key = 'server_address' LIMIT 1"
+        ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+
+        if let Some((ct, nonce, sig)) = config_row {
+            if let Ok(pt) = shared::crypto::decrypt_verify(&ct, &nonce, &sig, &ed_public, &ed_public) {
+                if let Ok(saved_url) = String::from_utf8(pt) {
+                    server_address = saved_url;
+                }
+            }
+        }
+
         Ok(Self {
             screen: Screen::MainMenu { selection: 0 },
             username: None, session_id: None,
@@ -74,7 +90,18 @@ impl AppState {
             db, 
             peer_keys: HashMap::new(),
             peer_public_keys: HashMap::new(),
+            server_address,
         })
+    }
+
+    pub async fn save_server_address(&self, address: &str) -> Result<(), AnonError> {
+        let pt = address.as_bytes();
+        let (ct, nonce, sig, _) = shared::crypto::encrypt_sign(pt, &self.ed_public, &self.ed_secret)
+            .map_err(|e| AnonError::Crypto(format!("{:?}", e)))?;
+        sqlx::query("INSERT OR REPLACE INTO config (key, ciphertext, nonce, signature) VALUES ('server_address', $1, $2, $3)")
+            .bind(ct).bind(nonce).bind(sig).execute(&self.db).await
+            .map_err(|e| AnonError::Db(e.to_string()))?;
+        Ok(())
     }
 
     pub fn logout(&mut self) {
@@ -98,7 +125,8 @@ impl AppState {
 
     pub fn get_chat_key(&self, target: &str) -> Result<Vec<u8>, AnonError> {
         let keys = self.peer_keys.get(target)
-            .ok_or_else(|| AnonError::Crypto(format!("Keys for {target} not cached")))?;
+            .ok_or_else(|| AnonError::Crypto(format!("Keys for {target} not cached")))?
+        ;
         derive_chat_key(&self.x25519_secret, &keys.x25519_public)
     }
 
