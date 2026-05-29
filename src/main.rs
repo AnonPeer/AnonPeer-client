@@ -14,7 +14,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = env::var("ANON_DB").unwrap_or_else(|_| "./anon.db".into());
 
     let app = AppState::new(&db_path).await?;
-    let ws_url = app.server_address.clone();
+    
+    // Получаем адрес: приоритет у переменной окружения, если её нет — берём из базы данных
+    let ws_url = env::var("ANON_SERVER").unwrap_or_else(|_| app.server_address.clone());
+
     let (tx, rx) = mpsc::unbounded_channel::<ServerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<ClientCommand>();
 

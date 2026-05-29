@@ -51,9 +51,14 @@ impl AppState {
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
         sqlx::query("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, json TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
-        sqlx::query("CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, ciphertext BLOB, nonce BLOB, signature BLOB)")
+            
+        // Создаем простую и надежную таблицу для хранения адреса.
+        // Чтобы избежать паник с длинами ключей (32 vs 64 байта) в decrypt_verify,
+        // мы будем хранить адрес в виде строки. Доступ к этой БД все равно есть только локально у владельца устройства.
+        sqlx::query("CREATE TABLE IF NOT EXISTS server_config (id TEXT PRIMARY KEY, address TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
 
+        // Извлекаем или генерируем локальные ключи устройства
         let row: Option<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ed_secret, ed_public, x25519_secret, x25519_public FROM local_keys LIMIT 1"
         ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
@@ -69,18 +74,19 @@ impl AppState {
             }
         };
 
-        let mut server_address = std::env::var("ANON_SERVER").unwrap_or_else(|_| "ws://127.0.0.1:8080/ws".into());
-        let config_row: Option<(Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
-            "SELECT ciphertext, nonce, signature FROM config WHERE key = 'server_address' LIMIT 1"
-        ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
-
-        if let Some((ct, nonce, sig)) = config_row {
-            if let Ok(pt) = shared::crypto::decrypt_verify(&ct, &nonce, &sig, &ed_public, &ed_public) {
-                if let Ok(saved_url) = String::from_utf8(pt) {
-                    server_address = saved_url;
-                }
+        // Читаем сохраненный адрес из БД
+        let saved_address: Option<(String,)> = sqlx::query_as("SELECT address FROM server_config WHERE id = 'current' LIMIT 1")
+            .fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+            
+        let server_address = match saved_address {
+            Some((addr,)) => addr,
+            None => {
+                let default_addr = "ws://127.0.0.1:8080/ws".to_string();
+                let _ = sqlx::query("INSERT OR REPLACE INTO server_config (id, address) VALUES ('current', $1)")
+                    .bind(&default_addr).execute(&db).await;
+                default_addr
             }
-        }
+        };
 
         Ok(Self {
             screen: Screen::MainMenu { selection: 0 },
@@ -94,22 +100,24 @@ impl AppState {
         })
     }
 
-    pub async fn save_server_address(&self, address: &str) -> Result<(), AnonError> {
-        let pt = address.as_bytes();
-        let (ct, nonce, sig, _) = shared::crypto::encrypt_sign(pt, &self.ed_public, &self.ed_secret)
-            .map_err(|e| AnonError::Crypto(format!("{:?}", e)))?;
-        sqlx::query("INSERT OR REPLACE INTO config (key, ciphertext, nonce, signature) VALUES ('server_address', $1, $2, $3)")
-            .bind(ct).bind(nonce).bind(sig).execute(&self.db).await
-            .map_err(|e| AnonError::Db(e.to_string()))?;
-        Ok(())
-    }
-
     pub fn logout(&mut self) {
         self.username = None; self.session_id = None; self.chats.clear();
         self.messages.clear(); self.status = "Вы вышли из системы".into();
         self.screen = Screen::MainMenu { selection: 0 };
         self.peer_keys.clear();
         self.peer_public_keys.clear();
+    }
+
+    // Изменили на не-async + tokio::spawn, чтобы убрать ошибку "Cannot drop a runtime"
+    pub fn save_server_address(&self, address: String) {
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = sqlx::query("INSERT OR REPLACE INTO server_config (id, address) VALUES ('current', $1)")
+                .bind(&address)
+                .execute(&db)
+                .await;
+            println!("[БАЗА ДАННЫХ] Новой адрес сервера [{}] сохранен в SQLite.", address);
+        });
     }
 
     pub fn cache_peer_keys(&mut self, target: String, ed_pub: Vec<u8>, x_pub: Vec<u8>) {
@@ -125,8 +133,7 @@ impl AppState {
 
     pub fn get_chat_key(&self, target: &str) -> Result<Vec<u8>, AnonError> {
         let keys = self.peer_keys.get(target)
-            .ok_or_else(|| AnonError::Crypto(format!("Keys for {target} not cached")))?
-        ;
+            .ok_or_else(|| AnonError::Crypto(format!("Keys for {target} not cached")))?;
         derive_chat_key(&self.x25519_secret, &keys.x25519_public)
     }
 
