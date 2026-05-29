@@ -133,14 +133,11 @@ impl Model {
                 Task::none()
             }
 
-
             ToggleSettings => {
                 self.show_settings = !self.show_settings;
                 if self.show_settings { self.hamburger_open = false; } 
                 Task::none()
             }
-
-
         }
     }
 
@@ -246,7 +243,8 @@ impl Model {
                 if let Some(user) = &self.state.username {
                     if let Ok(chat_key) = self.state.get_chat_key(target) {
                         let pt = input.as_bytes();
-                        if let Ok((ct, nonce, sig, _)) = shared::crypto::encrypt_sign(
+                        // ИСПРАВЛЕНО: Извлекаем eph_public вместо игнорирования `_`
+                        if let Ok((ct, nonce, sig, eph_public)) = shared::crypto::encrypt_sign(
                             pt, 
                             &chat_key, 
                             &self.state.ed_secret
@@ -259,7 +257,8 @@ impl Model {
                                 ciphertext: ct, 
                                 nonce, 
                                 signature: sig, 
-                                salt: vec![]
+                                salt: vec![],
+                                ephemeral_public: eph_public, // ИСПРАВЛЕНО: передаем недостающее поле
                             };
                             self.state.messages.push(msg.clone());
                             let db = self.state.clone(); 
