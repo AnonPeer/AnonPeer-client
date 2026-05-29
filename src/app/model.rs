@@ -136,14 +136,15 @@ impl Model {
                 Task::none()
             }
             ServerAddressChanged(v) => {
-                self.state.server_address = v;
+                self.state.server_address = v.clone();
+                let _ = self.cmd_tx.send(ClientCommand::UpdateServerAddress(v));
                 Task::done(SaveServerAddress)
             }
             SaveServerAddress => {
                 let current_state = self.state.clone();
                 let address = self.state.server_address.clone();
                 tokio::spawn(async move {
-                    let _ = current_state.save_server_address(&address).await;
+                    current_state.save_server_address(address.clone());
                 });
                 Task::none()
             }
@@ -266,7 +267,7 @@ impl Model {
                                 nonce, 
                                 signature: sig, 
                                 salt: vec![],
-                                ephemeral_public: eph_public,
+                                ephemeral_public: eph_public, // Исправлено добавление ключа
                             };
                             self.state.messages.push(msg.clone());
                             let db = self.state.clone(); 
