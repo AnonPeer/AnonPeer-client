@@ -32,23 +32,25 @@ pub fn view<'a>(
 
     sidebar_col = sidebar_col.push(Space::with_height(5));
 
-    let mut chats_list = Column::new().spacing(6).height(Length::Shrink);
+    let mut chats_list = Column::new().spacing(4);
+
     if chats.is_empty() {
         chats_list = chats_list.push(
-            text("Нет активных чатов").size(13).style(styles::muted_text())
+            container(text("Нет активных чатов").size(13).style(styles::muted_text()))
+                .padding(10)
+                .center_x(Length::Fill)
         );
     } else {
         for chat in chats {
             let is_selected = selected == Some(chat);
             let first = chat.chars().next().unwrap_or('?').to_uppercase().to_string();
-            
+
             chats_list = chats_list.push(
                 button(
                     row![
                         container(text(first).size(14))
                             .center_x(32).center_y(32)
                             .style(|_| container::Style {
-                               
                                 background: Some(colors::SURFACE.into()),
                                 border: iced::Border { radius: 16.0.into(), width: 0.0, color: iced::Color::TRANSPARENT },
                                 ..Default::default()
