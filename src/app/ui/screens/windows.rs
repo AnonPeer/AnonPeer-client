@@ -5,7 +5,8 @@ use crate::app::message::UiMessage;
 use crate::app::theme::styles;
 use crate::app::component::sidebar;
 use crate::state::Screen;
-use crate::{APP_FONT, EMOJI_FONT};
+use crate::EMOJI_FONT; 
+
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     let base_layout = match &model.state.screen {
@@ -43,12 +44,11 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 }
 
+
+
 fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
-    let sidebar = sidebar::view(
-        model.state.username.as_ref(),
-        &model.state.chats,
-        model.selected_chat.as_ref(),
-    );
+    let sidebar = sidebar::view(model);
+
     let hamburger_icon = column![
         container(horizontal_rule(2)).width(18).height(2),
         container(horizontal_rule(2)).width(18).height(2),
@@ -66,37 +66,22 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .width(Length::Fixed(60.0))
         .align_x(Alignment::Center);
 
-    let drawer_width = if model.hamburger_open {
-        240.0
+    let drawer_width = if model.hamburger_open { 240.0 } else { 0.0 };
+    let drawer = container(if model.hamburger_open {
+        view_hamburger_panel(model)
     } else {
-        0.0
-    };
-
-    let drawer = container(
-        if model.hamburger_open {
-            view_hamburger_panel(model)
-        } else {
-            column![].into()
-        }
-    )
+        column![].into()
+    })
     .width(Length::Fixed(drawer_width))
     .height(Length::Fill);
 
-    let top_bar = row![Space::with_width(Length::Fill)]
-        .padding([8, 12])
-        .height(Length::Fixed(44.0));
-
     let content = match &model.state.screen {
-        Screen::ChatView { target, input } => {
-            view_chat_view(model, target.as_str(), input.as_str())
-        }
-        Screen::NewChat { input } => {
-            view_new_chat(model, input.as_str())
-        }
+        Screen::ChatView { target, input } => view_chat_view(model, target.as_str(), input.as_str()),
+        Screen::NewChat { input } => view_new_chat(model, input.as_str()),
         _ => view_empty(),
     };
 
-    let main_area = column![top_bar, content]
+    let main_area = column![content]
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -210,7 +195,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .into()
 }
 
-fn view_welcome<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     const ICON_BYTES: &[u8] = include_bytes!("../../../ico.ico");
     let logo = Image::new(iced::widget::image::Handle::from_bytes(ICON_BYTES)).width(Length::Fixed(128.0)).height(Length::Fixed(128.0));
     let main_content = column![
@@ -341,6 +326,27 @@ fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage
     .center_x(Length::Fill)
     .center_y(Length::Fill)
     .into()
+}
+
+fn view_search_bar<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+    let search_input: Element<'a, UiMessage> = text_input("🔍 Искать по нику...", &model.state.server_address) 
+        .on_input(|v| UiMessage::ServerAddressChanged(v)) 
+        .on_submit(UiMessage::SaveServerAddress)
+        .padding(8)
+        .size(13)
+        .width(Length::Fixed(220.0))
+        .into();
+
+    let search_btn: Element<'a, UiMessage> = button(text("Найти").size(12))
+        .padding([6, 14])
+        .style(styles::accent_button())
+        .on_press(UiMessage::SaveServerAddress)
+        .into();
+
+    row![search_input, search_btn]
+        .spacing(6)
+        .align_y(Alignment::Center)
+        .into()
 }
 
 fn view_empty<'a>() -> Element<'a, UiMessage> {

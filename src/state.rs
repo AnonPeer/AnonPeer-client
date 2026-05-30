@@ -52,13 +52,9 @@ impl AppState {
         sqlx::query("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, json TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
             
-        // Создаем простую и надежную таблицу для хранения адреса.
-        // Чтобы избежать паник с длинами ключей (32 vs 64 байта) в decrypt_verify,
-        // мы будем хранить адрес в виде строки. Доступ к этой БД все равно есть только локально у владельца устройства.
         sqlx::query("CREATE TABLE IF NOT EXISTS server_config (id TEXT PRIMARY KEY, address TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
 
-        // Извлекаем или генерируем локальные ключи устройства
         let row: Option<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ed_secret, ed_public, x25519_secret, x25519_public FROM local_keys LIMIT 1"
         ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
@@ -74,7 +70,6 @@ impl AppState {
             }
         };
 
-        // Читаем сохраненный адрес из БД
         let saved_address: Option<(String,)> = sqlx::query_as("SELECT address FROM server_config WHERE id = 'current' LIMIT 1")
             .fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
             
@@ -108,7 +103,6 @@ impl AppState {
         self.peer_public_keys.clear();
     }
 
-    // Изменили на не-async + tokio::spawn, чтобы убрать ошибку "Cannot drop a runtime"
     pub fn save_server_address(&self, address: String) {
         let db = self.db.clone();
         tokio::spawn(async move {

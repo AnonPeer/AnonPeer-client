@@ -22,6 +22,15 @@ pub enum UiMessage {
     ChatViewSend,
     Logout,
 
+
+    SearchInputChanged(String),
+    SearchSubmit,
+    SearchResult { username: String, exists: bool },
+
+    SearchResultSelected(String),
+    SearchResultsReceived(Vec<String>),
+
+
     FetchKeysFor(String),
     KeysReceived { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },
     ToggleTheme,

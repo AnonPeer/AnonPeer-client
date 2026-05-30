@@ -11,6 +11,8 @@ pub enum ServerEvent {
     NewMessage(AppMessage),
     PeerKeys { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },
     Disconnect,
+    UserSearchResult { username: String, exists: bool },
+    SearchResults(Vec<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +22,8 @@ pub enum ClientCommand {
     Send(AppMessage),
     FetchPeerKeys(String),
     UpdateServerAddress(String),
+    SearchUser(String),
+    SearchPrefix(String),
 }
 
 pub async fn connect(
@@ -66,14 +70,29 @@ pub async fn connect(
                                 ServerPayload::AuthErr(reason) => {
                                     let _ = tx_clone.send(ServerEvent::AuthErr(reason));
                                 }
-                                // Точное совпадение с вашим protocol.rs!
+
                                 ServerPayload::Forward { msg } => {
                                     let _ = tx_clone.send(ServerEvent::NewMessage(msg));
                                 }
                                 ServerPayload::PeerKeys { target, ed_public, x25519_public } => {
                                     let _ = tx_clone.send(ServerEvent::PeerKeys { target, ed_public, x25519_public });
                                 }
+
+
+                                ServerPayload::UserSearchResult { username, exists } => {
+                                    let _ = tx_clone.send(ServerEvent::UserSearchResult { username, exists });
+                                }
+
+
+                                ServerPayload::SearchResults { matches } => {
+                                    let _ = tx_clone.send(ServerEvent::SearchResults(matches));
+                                }
+
+
                             }
+
+
+
                         }
                     }
                     Ok(WsMessage::Close(_)) | Err(_) => {
@@ -97,6 +116,10 @@ pub async fn connect(
                     ClientCommand::Send(msg) => ClientPayload::SendMessage { msg },
                     ClientCommand::FetchPeerKeys(t) => ClientPayload::RequestKeys { target: t },
                     ClientCommand::UpdateServerAddress(_) => unreachable!(),
+                    ClientCommand::SearchUser(u) => ClientPayload::SearchUser { username: u },
+                    ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p },
+                
+                
                 };
                 if let Ok(json) = serde_json::to_string(&payload) {
                     if ws_sender.send(WsMessage::Text(json)).await.is_err() {

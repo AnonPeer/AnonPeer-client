@@ -15,6 +15,10 @@ pub struct Model {
     pub hamburger_open: bool,
     pub is_light_theme: bool,
     pub show_settings: bool,
+    pub search_found: bool,
+    pub search_result: Option<(String, bool)>,
+    pub search_query: String,
+    pub search_matches: Vec<String>,
 }
 
 impl Model {
@@ -29,6 +33,10 @@ impl Model {
             hamburger_open: false,
             is_light_theme: false,
             show_settings: false,
+            search_query: String::new(),
+            search_found: false,
+            search_result: None,
+            search_matches: Vec::new(),
         }
     }
 
@@ -148,6 +156,41 @@ impl Model {
                 });
                 Task::none()
             }
+
+            UiMessage::SearchInputChanged(v) => {
+                self.search_query = v.clone();
+                if v.len() >= 2 {
+                    let _ = self.cmd_tx.send(ClientCommand::SearchPrefix(v));
+                } else {
+                    self.search_matches.clear();
+                }
+                Task::none()
+            }
+            UiMessage::SearchResultSelected(name) => {
+                self.search_query.clear();
+                self.search_matches.clear();
+                return Task::done(UiMessage::ChatSelected(name));
+            }
+            UiMessage::SearchResultsReceived(matches) => {
+                self.search_matches = matches;
+                Task::none()
+            }
+
+            UiMessage::SearchSubmit => {
+                if !self.search_query.trim().is_empty() {
+                    let _ = self.cmd_tx.send(ClientCommand::SearchPrefix(self.search_query.clone()));
+                }
+                Task::none()
+            }
+
+            UiMessage::SearchResult { username, exists } => {
+                if exists {
+                    self.search_query.clear();
+                    self.search_matches.clear();
+                    return Task::done(UiMessage::ChatSelected(username));
+                }
+                Task::none()
+            }
         }
     }
 
@@ -170,6 +213,7 @@ impl Model {
                 self.state.status = "Успешная авторизация".into();
                 Task::none()
             }
+            UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
             AuthErr(e) => {
                 self.state.status = format!("Ошибка: {}", e);
                 Task::none()
@@ -197,6 +241,14 @@ impl Model {
             PeerKeys { target, ed_public, x25519_public } => {
                 self.state.cache_peer_keys(target.clone(), ed_public.clone(), x25519_public.clone());
                 Task::done(UiMessage::KeysReceived { target, ed_public, x25519_public })
+            }
+
+            ServerEvent::UserSearchResult { username, exists } => {
+                return Task::done(UiMessage::SearchResult { username, exists });
+            }
+
+            ServerEvent::SearchResults(matches) => {
+                Task::done(UiMessage::SearchResultsReceived(matches))
             }
         }
     }
@@ -253,11 +305,12 @@ impl Model {
                 if let Some(user) = &self.state.username {
                     if let Ok(chat_key) = self.state.get_chat_key(target) {
                         let pt = input.as_bytes();
-                        if let Ok((ct, nonce, sig, eph_public)) = shared::crypto::encrypt_sign(
+                        if let Ok((ct, nonce, sig, _eph_public)) = shared::crypto::encrypt_sign(
                             pt, 
                             &chat_key, 
                             &self.state.ed_secret
                         ) {
+                            
                             let msg = shared::protocol::AppMessage {
                                 id: uuid::Uuid::new_v4(), 
                                 from: user.clone(), 
@@ -267,8 +320,8 @@ impl Model {
                                 nonce, 
                                 signature: sig, 
                                 salt: vec![],
-                                ephemeral_public: eph_public, // Исправлено добавление ключа
                             };
+
                             self.state.messages.push(msg.clone());
                             let db = self.state.clone(); 
                             let m = msg.clone();
