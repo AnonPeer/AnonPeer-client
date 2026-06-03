@@ -247,7 +247,13 @@ impl Model {
                 Task::none()
             }
             UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
-            NewMessage(msg) => {
+            NewMessage(mut msg) => {
+                // Прямо здесь форсируем локальное время устройства для отображения
+                msg.timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+
                 self.state.messages.push(msg.clone());
                 let db = self.state.clone(); 
                 let m = msg.clone();
@@ -339,7 +345,10 @@ impl Model {
                                 id: uuid::Uuid::new_v4(), 
                                 from: user.clone(), 
                                 to: target.clone(),
-                                timestamp: chrono::Utc::now().timestamp() as u64, 
+                                timestamp: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(), 
                                 ciphertext: ct, 
                                 nonce, 
                                 signature: sig, 
