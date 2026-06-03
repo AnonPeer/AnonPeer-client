@@ -50,12 +50,16 @@ impl AppState {
         
         sqlx::query("CREATE TABLE IF NOT EXISTS local_keys (id INTEGER PRIMARY KEY, ed_secret BLOB, ed_public BLOB, x25519_secret BLOB, x25519_public BLOB)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
-        sqlx::query("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, json TEXT)")
+        
+        sqlx::query("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, json TEXT, local_order INTEGER)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+            
+        if let Err(_) = sqlx::query("SELECT local_order FROM messages LIMIT 1").fetch_optional(&db).await {
+            let _ = sqlx::query("ALTER TABLE messages ADD COLUMN local_order INTEGER").execute(&db).await;
+        }
             
         sqlx::query("CREATE TABLE IF NOT EXISTS server_config (id TEXT PRIMARY KEY, address TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
-
 
         sqlx::query("CREATE TABLE IF NOT EXISTS local_session (id INTEGER PRIMARY KEY, username TEXT, session_id TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
@@ -63,7 +67,6 @@ impl AppState {
         let saved_session: Option<(String, String)> = sqlx::query_as(
             "SELECT username, session_id FROM local_session LIMIT 1"
         ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
-
 
         let row: Option<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ed_secret, ed_public, x25519_secret, x25519_public FROM local_keys LIMIT 1"
@@ -105,15 +108,16 @@ impl AppState {
             saved_session,
         };
 
-
         state.load_history().await?;
 
         Ok(state)
     }
 
     pub async fn load_history(&mut self) -> Result<(), AnonError> {
+        self.messages.clear();
+
         let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT id, json FROM messages"
+            "SELECT id, json FROM messages ORDER BY COALESCE(local_order, rowid) ASC"
         )
         .fetch_all(&self.db)
         .await
@@ -132,14 +136,11 @@ impl AppState {
             }
         }
         
-        self.messages.sort_by_key(|m| m.timestamp);
         self.chats.sort();
-        self.chats.dedup(); // Убираем дубликаты
+        self.chats.dedup();
         
         Ok(())
     }
-
-
 
     pub fn save_local_session(&self, username: String, session_id: String) {
         let db = self.db.clone();
@@ -148,8 +149,6 @@ impl AppState {
                 .bind(&username).bind(&session_id).execute(&db).await;
         });
     }
-
-
 
     pub fn clear_local_session(&self) {
         let db = self.db.clone();
@@ -196,8 +195,17 @@ impl AppState {
 
     pub async fn save_message(&self, msg: &AppMessage) -> Result<(), AnonError> {
         let json = serde_json::to_string(msg).map_err(|e| AnonError::Db(e.to_string()))?;
-        sqlx::query("INSERT OR IGNORE INTO messages (id, json) VALUES ($1, $2)")
-            .bind(msg.id.to_string()).bind(json).execute(&self.db).await
+        
+        let max_order_row: Option<(Option<i64>,)> = sqlx::query_as("SELECT MAX(local_order) FROM messages")
+            .fetch_optional(&self.db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+        
+        let next_order = match max_order_row {
+            Some((Some(max),)) => max + 1,
+            _ => 1,
+        };
+
+        sqlx::query("INSERT OR IGNORE INTO messages (id, json, local_order) VALUES ($1, $2, $3)")
+            .bind(msg.id.to_string()).bind(json).bind(next_order).execute(&self.db).await
             .map_err(|e| AnonError::Db(e.to_string()))?;
         Ok(())
     }
