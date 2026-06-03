@@ -23,11 +23,21 @@ pub struct Model {
 
 impl Model {
     pub fn new(state: AppState, rx: mpsc::UnboundedReceiver<ServerEvent>, cmd_tx: mpsc::UnboundedSender<ClientCommand>) -> Self {
-        Self { 
-            state, 
-            rx, 
-            cmd_tx, 
-            password_visible: false, 
+        let mut initial_state = state;
+
+        // Если есть сохраненная сессия, пытаемся войти автоматически
+        if let Some((username, session_id)) = &initial_state.saved_session {
+            let _ = cmd_tx.send(ClientCommand::ValidateSession(session_id.clone()));
+            initial_state.username = Some(username.clone());
+            initial_state.session_id = Some(session_id.clone());
+            initial_state.screen = crate::state::Screen::ChatList;
+        }
+
+        Self {
+            state: initial_state,
+            rx,
+            cmd_tx,
+            password_visible: false,
             selected_chat: None,
             scroll_id: scrollable::Id::new("chat_scroll"),
             hamburger_open: false,
@@ -77,18 +87,30 @@ impl Model {
                 self.state.status.clear(); 
                 Task::none() 
             }
-            ChatSelected(t) => {
-                self.selected_chat = Some(t.clone());
-                self.state.screen = crate::state::Screen::ChatView { 
-                    target: t.clone(), 
-                    input: String::new() 
-                };
-                self.state.status.clear();
-                if !self.state.peer_keys.contains_key(&t) { 
-                    let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t)); 
-                }
-                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+            
+
+        ChatSelected(t) => {
+            // 1. ДОБАВЛЯЕМ ЧАТ В СПИСОК, ЕСЛИ ЕГО ТАМ ЕЩЕ НЕТ (решает проблему с поиском)
+            if !self.state.chats.contains(&t) && self.state.username.as_ref().map_or(true, |u| u != &t) {
+                self.state.chats.push(t.clone());
+                self.state.chats.sort();
             }
+
+            self.selected_chat = Some(t.clone());
+            self.state.screen = crate::state::Screen::ChatView { 
+                target: t.clone(), 
+                input: String::new() 
+            };
+            self.state.status.clear();
+            if !self.state.peer_keys.contains_key(&t) { 
+                let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t)); 
+            }
+            scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+        }
+
+
+
+
             OpenNewChatScreen => { 
                 self.state.screen = crate::state::Screen::NewChat { input: String::new() }; 
                 self.state.status.clear(); 
@@ -119,6 +141,7 @@ impl Model {
             Logout => { 
                 self.selected_chat = None; 
                 self.state.logout(); 
+                self.state.clear_local_session(); 
                 Task::none() 
             }
             FetchKeysFor(t) => { 
@@ -201,29 +224,47 @@ impl Model {
         Task::none()
     }
 
+
+
+
+
     fn handle_network(&mut self, ev: ServerEvent) -> Task<UiMessage> {
         use ServerEvent::*;
         match ev {
             AuthOk(sid) => {
-                self.state.session_id = Some(sid);
+                // ИСПРАВЛЕНИЕ: клонируем sid перед перемещением
+                self.state.session_id = Some(sid.clone());
+                
                 if let crate::state::Screen::AuthForm { username, .. } = &self.state.screen { 
                     self.state.username = Some(username.clone()); 
+                    self.state.save_local_session(username.clone(), sid.clone());
+                } else if let Some((saved_user, _)) = &self.state.saved_session {
+                    self.state.username = Some(saved_user.clone());
                 }
+                
                 self.state.screen = crate::state::Screen::ChatList; 
                 self.state.status = "Успешная авторизация".into();
                 Task::none()
             }
-            UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
             AuthErr(e) => {
                 self.state.status = format!("Ошибка: {}", e);
+                // Если авто-вход не удался (сессия протухла), сбрасываем её
+                if self.state.saved_session.is_some() {
+                    self.state.saved_session = None;
+                    self.state.clear_local_session();
+                    self.state.screen = crate::state::Screen::MainMenu { selection: 0 };
+                    self.state.username = None;
+                    self.state.session_id = None;
+                }
                 Task::none()
             }
+            UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
             NewMessage(msg) => {
                 self.state.messages.push(msg.clone());
                 let db = self.state.clone(); 
                 let m = msg.clone();
                 tokio::spawn(async move { 
-                    let _ = db.save_message(&m).await; 
+                     let _ = db.save_message(&m).await; 
                 });
                 if !self.state.chats.contains(&msg.from) && self.state.username.as_ref().map_or(true, |u| u != &msg.from) {
                     self.state.chats.push(msg.from.clone()); 
@@ -242,16 +283,14 @@ impl Model {
                 self.state.cache_peer_keys(target.clone(), ed_public.clone(), x25519_public.clone());
                 Task::done(UiMessage::KeysReceived { target, ed_public, x25519_public })
             }
-
-            ServerEvent::UserSearchResult { username, exists } => {
-                return Task::done(UiMessage::SearchResult { username, exists });
-            }
-
-            ServerEvent::SearchResults(matches) => {
+            SearchResults(matches) => {
                 Task::done(UiMessage::SearchResultsReceived(matches))
             }
         }
     }
+
+
+
 
     fn auth_submit(&mut self) -> Task<UiMessage> {
         if let crate::state::Screen::AuthForm { is_register, username, password, .. } = &self.state.screen {

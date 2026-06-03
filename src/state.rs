@@ -38,6 +38,7 @@ pub struct AppState {
     pub peer_keys: HashMap<String, PeerKeys>,
     pub peer_public_keys: std::collections::HashMap<String, Vec<u8>>,
     pub server_address: String,
+    pub saved_session: Option<(String, String)>, 
 }
 
 impl AppState {
@@ -54,6 +55,15 @@ impl AppState {
             
         sqlx::query("CREATE TABLE IF NOT EXISTS server_config (id TEXT PRIMARY KEY, address TEXT)")
             .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+
+
+        sqlx::query("CREATE TABLE IF NOT EXISTS local_session (id INTEGER PRIMARY KEY, username TEXT, session_id TEXT)")
+            .execute(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+
+        let saved_session: Option<(String, String)> = sqlx::query_as(
+            "SELECT username, session_id FROM local_session LIMIT 1"
+        ).fetch_optional(&db).await.map_err(|e| AnonError::Db(e.to_string()))?;
+
 
         let row: Option<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ed_secret, ed_public, x25519_secret, x25519_public FROM local_keys LIMIT 1"
@@ -83,17 +93,79 @@ impl AppState {
             }
         };
 
-        Ok(Self {
+        let mut state = Self {
             screen: Screen::MainMenu { selection: 0 },
             username: None, session_id: None,
-            ed_secret, ed_public, x25519_secret, x25519_public,
+            ed_secret,  ed_public, x25519_secret, x25519_public,
             chats: Vec::new(), messages: Vec::new(), status: String::new(),
             db, 
             peer_keys: HashMap::new(),
             peer_public_keys: HashMap::new(),
             server_address,
-        })
+            saved_session,
+        };
+
+
+        state.load_history().await?;
+
+        Ok(state)
     }
+
+
+
+
+
+
+    pub async fn load_history(&mut self) -> Result<(), AnonError> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT id, json FROM messages"
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| AnonError::Db(e.to_string()))?;
+
+        for (_, json_str) in rows {
+            if let Ok(msg) = serde_json::from_str::<AppMessage>(&json_str) {
+                self.messages.push(msg.clone());
+                
+                // Собираем всех уникальных участников для формирования списка чатов
+                if !self.chats.contains(&msg.from) {
+                    self.chats.push(msg.from.clone());
+                }
+                if !self.chats.contains(&msg.to) {
+                    self.chats.push(msg.to.clone());
+                }
+            }
+        }
+        
+        // Сортируем сообщения по времени, чтобы они отображались в правильном порядке
+        self.messages.sort_by_key(|m| m.timestamp);
+        self.chats.sort();
+        self.chats.dedup(); // Убираем дубликаты
+        
+        Ok(())
+    }
+
+
+
+    pub fn save_local_session(&self, username: String, session_id: String) {
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = sqlx::query("INSERT OR REPLACE INTO local_session (id, username, session_id) VALUES (1, $1, $2)")
+                .bind(&username).bind(&session_id).execute(&db).await;
+        });
+    }
+
+
+
+    pub fn clear_local_session(&self) {
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = sqlx::query("DELETE FROM local_session WHERE id = 1").execute(&db).await;
+        });
+    }
+
+
 
     pub fn logout(&mut self) {
         self.username = None; self.session_id = None; self.chats.clear();

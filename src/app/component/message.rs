@@ -5,12 +5,14 @@ use shared::crypto::decrypt_verify;
 use crate::app::message::UiMessage;
 use crate::state::AppState;
 use crate::app::theme::{colors, styles};
+use chrono::TimeZone;
 
 pub fn view_bubble<'a>(msg: &'a AppMessage, state: &'a AppState, my_username: &str) -> Element<'a, UiMessage> {
     let is_my = msg.from == my_username;
-    let time_str = chrono::DateTime::from_timestamp(msg.timestamp as i64, 0)
-        .map(|d| d.format("%H:%M").to_string()).unwrap_or_default();
-    
+    let time_str = chrono::Local.timestamp_opt(msg.timestamp as i64, 0)
+        .single()
+        .map(|d| d.format("%H:%M").to_string())
+        .unwrap_or_else(|| "??:??".to_string());
     let chat_key = state.get_chat_key(if is_my { &msg.to } else { &msg.from }).ok();
     let sender_pub = state.get_sender_public_key(&msg.from);
     
