@@ -25,7 +25,6 @@ impl Model {
     pub fn new(state: AppState, rx: mpsc::UnboundedReceiver<ServerEvent>, cmd_tx: mpsc::UnboundedSender<ClientCommand>) -> Self {
         let mut initial_state = state;
 
-        // Если есть сохраненная сессия, пытаемся войти автоматически
         if let Some((username, session_id)) = &initial_state.saved_session {
             let _ = cmd_tx.send(ClientCommand::ValidateSession(session_id.clone()));
             initial_state.username = Some(username.clone());
@@ -88,9 +87,7 @@ impl Model {
                 Task::none() 
             }
             
-
         ChatSelected(t) => {
-            // 1. ДОБАВЛЯЕМ ЧАТ В СПИСОК, ЕСЛИ ЕГО ТАМ ЕЩЕ НЕТ (решает проблему с поиском)
             if !self.state.chats.contains(&t) && self.state.username.as_ref().map_or(true, |u| u != &t) {
                 self.state.chats.push(t.clone());
                 self.state.chats.sort();
@@ -107,9 +104,6 @@ impl Model {
             }
             scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
         }
-
-
-
 
             OpenNewChatScreen => { 
                 self.state.screen = crate::state::Screen::NewChat { input: String::new() }; 
@@ -224,15 +218,10 @@ impl Model {
         Task::none()
     }
 
-
-
-
-
     fn handle_network(&mut self, ev: ServerEvent) -> Task<UiMessage> {
         use ServerEvent::*;
         match ev {
             AuthOk(sid) => {
-                // ИСПРАВЛЕНИЕ: клонируем sid перед перемещением
                 self.state.session_id = Some(sid.clone());
                 
                 if let crate::state::Screen::AuthForm { username, .. } = &self.state.screen { 
@@ -248,7 +237,6 @@ impl Model {
             }
             AuthErr(e) => {
                 self.state.status = format!("Ошибка: {}", e);
-                // Если авто-вход не удался (сессия протухла), сбрасываем её
                 if self.state.saved_session.is_some() {
                     self.state.saved_session = None;
                     self.state.clear_local_session();
@@ -288,9 +276,6 @@ impl Model {
             }
         }
     }
-
-
-
 
     fn auth_submit(&mut self) -> Task<UiMessage> {
         if let crate::state::Screen::AuthForm { is_register, username, password, .. } = &self.state.screen {
