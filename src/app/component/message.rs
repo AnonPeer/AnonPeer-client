@@ -9,10 +9,13 @@ use chrono::TimeZone;
 
 pub fn view_bubble<'a>(msg: &'a AppMessage, state: &'a AppState, my_username: &str) -> Element<'a, UiMessage> {
     let is_my = msg.from == my_username;
+    
+    // Переводит UNIX-timestamp в локальный часовой пояс устройства
     let time_str = chrono::Local.timestamp_opt(msg.timestamp as i64, 0)
         .single()
         .map(|d| d.format("%H:%M").to_string())
         .unwrap_or_else(|| "??:??".to_string());
+        
     let chat_key = state.get_chat_key(if is_my { &msg.to } else { &msg.from }).ok();
     let sender_pub = state.get_sender_public_key(&msg.from);
     
