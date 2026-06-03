@@ -172,7 +172,6 @@ impl AppState {
                 .bind(&address)
                 .execute(&db)
                 .await;
-            println!("[БАЗА ДАННЫХ] Новой адрес сервера [{}] сохранен в SQLite.", address);
         });
     }
 
@@ -194,7 +193,13 @@ impl AppState {
     }
 
     pub async fn save_message(&self, msg: &AppMessage) -> Result<(), AnonError> {
-        let json = serde_json::to_string(msg).map_err(|e| AnonError::Db(e.to_string()))?;
+        let mut local_msg = msg.clone();
+        local_msg.timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let json = serde_json::to_string(&local_msg).map_err(|e| AnonError::Db(e.to_string()))?;
         
         let max_order_row: Option<(Option<i64>,)> = sqlx::query_as("SELECT MAX(local_order) FROM messages")
             .fetch_optional(&self.db).await.map_err(|e| AnonError::Db(e.to_string()))?;
