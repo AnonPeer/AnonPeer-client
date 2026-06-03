@@ -111,11 +111,6 @@ impl AppState {
         Ok(state)
     }
 
-
-
-
-
-
     pub async fn load_history(&mut self) -> Result<(), AnonError> {
         let rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT id, json FROM messages"
@@ -127,8 +122,7 @@ impl AppState {
         for (_, json_str) in rows {
             if let Ok(msg) = serde_json::from_str::<AppMessage>(&json_str) {
                 self.messages.push(msg.clone());
-                
-                // Собираем всех уникальных участников для формирования списка чатов
+
                 if !self.chats.contains(&msg.from) {
                     self.chats.push(msg.from.clone());
                 }
@@ -138,7 +132,6 @@ impl AppState {
             }
         }
         
-        // Сортируем сообщения по времени, чтобы они отображались в правильном порядке
         self.messages.sort_by_key(|m| m.timestamp);
         self.chats.sort();
         self.chats.dedup(); // Убираем дубликаты
@@ -164,8 +157,6 @@ impl AppState {
             let _ = sqlx::query("DELETE FROM local_session WHERE id = 1").execute(&db).await;
         });
     }
-
-
 
     pub fn logout(&mut self) {
         self.username = None; self.session_id = None; self.chats.clear();
