@@ -4,6 +4,7 @@ use iced::widget::scrollable;
 use crate::state::AppState;
 use crate::network::{ServerEvent, ClientCommand};
 use super::message::UiMessage;
+use base64::Engine;
 
 pub struct Model {
     pub state: AppState,
@@ -193,6 +194,83 @@ impl Model {
                 Task::none()
             }
 
+
+
+
+
+
+
+            UiMessage::PickImage => {
+                Task::perform(
+                    async {
+                        if let Some(file) = rfd::AsyncFileDialog::new()
+                            .add_filter("Изображения", &["jpg", "jpeg", "png", "webp"])
+                            .pick_file()
+                            .await
+                        {
+                            file.path().to_string_lossy().to_string()
+                        } else {
+                            String::new()
+                        }
+                    },
+                    |path| UiMessage::ImagePicked(path),
+                )
+            }
+            UiMessage::ImagePicked(path) => {
+                if path.is_empty() {
+                    return Task::none();
+                }
+                Task::perform(
+                    async move {
+                        let img = match image::open(&path) {
+                            Ok(i) => i,
+                            Err(_) => return Err("Не удалось открыть изображение".to_string()),
+                        };
+                        let resized = img.resize(800, 800, image::imageops::FilterType::Lanczos3);
+                        
+                        let mut buffer = std::io::Cursor::new(Vec::new());
+                        resized.write_to(&mut buffer, image::ImageFormat::Jpeg)
+                            .map_err(|_| "Ошибка сжатия изображения".to_string())?;
+                        
+                        let bytes = buffer.into_inner();
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                        Ok(("image/jpeg".to_string(), b64))
+                    },
+                    |res| match res {
+                        Ok((mime, data)) => UiMessage::ReadyToSendImage(mime, data),
+                        Err(e) => UiMessage::StatusUpdate(format!("Ошибка: {}", e)),
+                    },
+                )
+            }
+            UiMessage::ChatViewSend => {
+                if let crate::state::Screen::ChatView { input, .. } = &self.state.screen {
+                    if !input.trim().is_empty() {
+                        self.send_message_content(shared::protocol::MessageContent::Text(input.clone()));
+                    }
+                }
+                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+            }
+            UiMessage::ReadyToSendImage(mime, data) => {
+                self.send_message_content(shared::protocol::MessageContent::Image { mime_type: mime, base64_data: data });
+                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+            }
+            UiMessage::StatusUpdate(status) => {
+                self.state.status = status;
+                Task::none()
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
             UiMessage::SearchSubmit => {
                 if !self.search_query.trim().is_empty() {
                     let _ = self.cmd_tx.send(ClientCommand::SearchPrefix(self.search_query.clone()));
@@ -248,7 +326,6 @@ impl Model {
             }
             UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
             NewMessage(mut msg) => {
-                // Прямо здесь форсируем локальное время устройства для отображения
                 msg.timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -285,25 +362,28 @@ impl Model {
 
     fn auth_submit(&mut self) -> Task<UiMessage> {
         if let crate::state::Screen::AuthForm { is_register, username, password, .. } = &self.state.screen {
-            if !username.is_empty() && !password.is_empty() {
-                let cmd = if *is_register {
-                    ClientCommand::Register(
-                        username.clone(), 
-                        password.clone(), 
-                        self.state.ed_public.clone(), 
-                        self.state.x25519_public.clone()
-                    )
-                } else {
-                    ClientCommand::Login(
-                        username.clone(), 
-                        password.clone(), 
-                        self.state.ed_public.clone(), 
-                        self.state.x25519_public.clone()
-                    )
-                };
-                let _ = self.cmd_tx.send(cmd);
-                self.state.status = "Запрос отправлен...".into();
+            if username.trim().is_empty() || password.trim().is_empty() {
+                self.state.status = "Заполните все поля!".into();
+                return Task::none();
             }
+            
+            let cmd = if *is_register {
+                ClientCommand::Register(
+                    username.clone(), 
+                    password.clone(), 
+                    self.state.ed_public.clone(), 
+                    self.state.x25519_public.clone()
+                )
+            } else {
+                ClientCommand::Login(
+                    username.clone(), 
+                    password.clone(), 
+                    self.state.ed_public.clone(), 
+                    self.state.x25519_public.clone()
+                )
+            };
+            let _ = self.cmd_tx.send(cmd);
+            self.state.status = "Запрос отправлен...".into();
         }
         Task::none()
     }
@@ -376,6 +456,91 @@ impl Model {
             }
         }
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    fn send_message_content(&mut self, content: shared::protocol::MessageContent) {
+        if let crate::state::Screen::ChatView { target, .. } = &self.state.screen {
+            if let Some(user) = &self.state.username {
+                if let Ok(chat_key) = self.state.get_chat_key(target) {
+                    let pt = match serde_json::to_vec(&content) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            self.state.status = "Ошибка сериализации".into();
+                            return;
+                        }
+                    };
+
+                    if let Ok((ct, nonce, sig, _eph_public)) = shared::crypto::encrypt_sign(
+                        &pt, 
+                        &chat_key, 
+                        &self.state.ed_secret
+                    ) {
+                        let msg = shared::protocol::AppMessage {
+                            id: uuid::Uuid::new_v4(), 
+                            from: user.clone(), 
+                            to: target.clone(),
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(), 
+                            ciphertext: ct, 
+                            nonce, 
+                            signature: sig, 
+                            salt: vec![],
+                        };
+
+                        self.state.messages.push(msg.clone());
+                        
+                        let db = self.state.clone(); 
+                        let m = msg.clone();
+                        tokio::spawn(async move { 
+                            let _ = db.save_message(&m).await; 
+                        });
+                        
+                        let _ = self.cmd_tx.send(ClientCommand::Send(msg));
+                        
+                        if let shared::protocol::MessageContent::Text(_) = content {
+                            if let crate::state::Screen::ChatView { input, .. } = &mut self.state.screen { 
+                                *input = String::new(); 
+                            }
+                        }
+                    } else { 
+                        self.state.status = "Ошибка шифрования".into(); 
+                    }
+                } else {
+                    self.state.status = "Нет ключей собеседника".into();
+                    let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(target.clone()));
+                }
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     pub fn subscription(&self) -> iced::Subscription<UiMessage> {
         use std::time::Duration;

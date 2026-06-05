@@ -8,11 +8,16 @@ pub fn chat_input<'a>(
     placeholder: &'a str,
     on_input: impl Fn(String) -> UiMessage + 'a,
     on_submit: UiMessage,
+    on_attach: UiMessage, // <-- Новый параметр
 ) -> Element<'a, UiMessage> {
     row![
+        button(text("📎").size(16))
+            .padding([12, 16])
+            .style(styles::surface_button())
+            .on_press(on_attach),
         text_input(placeholder, input)
             .on_input(on_input)
-            .on_submit(on_submit.clone())  
+            .on_submit(on_submit.clone())
             .padding(12)
             .size(14),
         button(text("Отправить").size(14))

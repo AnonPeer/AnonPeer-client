@@ -22,6 +22,10 @@ pub enum UiMessage {
     ChatViewSend,
     Logout,
 
+    PickImage,
+    ImagePicked(String), 
+    ReadyToSendImage(String, String), 
+    StatusUpdate(String),
 
     SearchInputChanged(String),
     SearchSubmit,

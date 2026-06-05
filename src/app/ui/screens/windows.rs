@@ -242,18 +242,38 @@ fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
 
 fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -> Element<'a, UiMessage> {
     let title = if is_reg { "Регистрация нового профиля" } else { "Авторизация" };
+    
+    let status_color = if model.state.status.starts_with("Ошибка") || model.state.status.starts_with("Заполните") {
+        iced::Color::from_rgb(0.9, 0.3, 0.3) 
+    } else if model.state.status.is_empty() {
+        iced::Color::TRANSPARENT
+    } else {
+        iced::Color::from_rgb(0.3, 0.8, 0.3) 
+    };
+
     container(column![
         text(title).size(20),
         Space::with_height(16),
         text("Имя пользователя").size(12).style(styles::muted_text()),
-        text_input(" ", user).on_input(UiMessage::AuthUsernameChanged).padding(10),
+        text_input("Введите логин", user)
+            .on_input(UiMessage::AuthUsernameChanged)
+            .padding(10),
         Space::with_height(12),
         text("Пароль").size(12).style(styles::muted_text()),
         row![
-            text_input(" ", pass).on_input(UiMessage::AuthPasswordChanged).secure(!model.password_visible).padding(10),
-            button(text(if model.password_visible { "Скрыть" } else { "Показать" }).size(12)).padding(10).on_press(UiMessage::AuthTogglePasswordVisibility)
+            text_input("Введите пароль", pass)
+                .on_input(UiMessage::AuthPasswordChanged)
+                .secure(!model.password_visible)
+                .padding(10),
+            button(text(if model.password_visible { "Скрыть" } else { "Показать" }).size(12))
+                .padding(10)
+                .on_press(UiMessage::AuthTogglePasswordVisibility)
         ].spacing(6),
-        Space::with_height(20),
+        Space::with_height(10),
+        text(&model.state.status).size(12).style(move |_| iced::widget::text::Style { 
+            color: Some(status_color) 
+        }),
+        Space::with_height(10),
         row![
             button(text("Назад").size(14)).padding([10,20]).on_press(UiMessage::AuthBack),
             Space::with_width(Length::Fill),
@@ -304,7 +324,8 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
             input,
             "Напишите сообщение...",
             |v| UiMessage::ChatViewInputChanged(v),
-            UiMessage::ChatViewSend
+            UiMessage::ChatViewSend,
+            UiMessage::PickImage,
         )
     ].height(Length::Fill).into()
 }
