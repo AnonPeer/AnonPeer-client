@@ -5,6 +5,7 @@ use shared::crypto::decrypt_verify;
 use crate::app::message::UiMessage;
 use crate::app::model::Model;
 use crate::app::theme::{colors, styles};
+use crate::EMOJI_FONT;
 use chrono::TimeZone;
 use base64::Engine;
 use std::sync::Arc;
@@ -12,17 +13,25 @@ use std::sync::Arc;
 pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str) -> Element<'a, UiMessage> {
     let state = &model.state;
     let is_my = msg.from == my_username;
+    
     let time_str = chrono::Local.timestamp_opt(msg.timestamp as i64, 0)
         .single()
         .map(|d| d.format("%H:%M").to_string())
         .unwrap_or_else(|| "??:??".to_string());
-    
+
     let chat_key = state.get_chat_key(if is_my { &msg.to } else { &msg.from }).ok();
     let sender_pub = state.get_sender_public_key(&msg.from);
 
-    let mut msg_block = Column::new().spacing(3).height(Length::Shrink);
+    let mut msg_block = Column::new().spacing(4).height(Length::Shrink);
+    
     if !is_my {
-        msg_block = msg_block.push(text(&msg.from).size(11).style(|_| iced::widget::text::Style { color: Some(colors::ACCENT) }));
+        msg_block = msg_block.push(
+            text(&msg.from)
+                .size(12)
+                .style(|_| iced::widget::text::Style { color: Some(colors::ACCENT) })
+                .shaping(iced::widget::text::Shaping::Advanced)
+                .font(EMOJI_FONT)
+        );
     }
 
     let cached_content = {
@@ -62,9 +71,21 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
     match content_arc.as_ref() {
         Ok(MessageContent::Text(t)) => {
             msg_block = msg_block.push(
-                row![text(t.clone()).size(14), Space::with_width(12), text(time_str).size(10).style(styles::muted_text())].align_y(Alignment::End)
+                row![
+                    text(t.clone())
+                        .size(15)
+                        .shaping(iced::widget::text::Shaping::Advanced)
+                        .font(EMOJI_FONT), 
+                    Space::with_width(16), 
+                    text(time_str)
+                        .size(11)
+                        .style(styles::muted_text())
+                        .shaping(iced::widget::text::Shaping::Advanced)
+                ].align_y(Alignment::End)
             );
         }
+
+
 
         Ok(MessageContent::Image { mime_type: _, base64_data }) => {
             let handle = {
@@ -84,9 +105,16 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                 }
             });
 
-            let img = iced::widget::Image::new(handle.clone()).width(Length::Fixed(200.0)); 
-            
-            let clickable_img = iced::widget::button(img)
+            let img = iced::widget::Image::new(handle.clone())
+                .width(Length::Fixed(220.0));
+
+            let styled_img = container(img)
+                .style(|_| container::Style {
+                    border: iced::Border { radius: 12.0.into(), width: 0.0, color: iced::Color::TRANSPARENT },
+                    ..Default::default()
+                });
+
+            let clickable_img = iced::widget::button(styled_img)
                 .style(|_, _| iced::widget::button::Style {
                     background: Some(iced::Color::TRANSPARENT.into()),
                     ..Default::default()
@@ -94,20 +122,37 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                 .on_press(UiMessage::ExpandImage(msg.id)); 
 
             msg_block = msg_block.push(clickable_img);
-            msg_block = msg_block.push(text(time_str).size(10).style(styles::muted_text()).align_x(Alignment::End));
+            msg_block = msg_block.push(
+                text(time_str)
+                    .size(11)
+                    .style(styles::muted_text())
+                    .align_x(Alignment::End)
+                    .shaping(iced::widget::text::Shaping::Advanced)
+            );
         }
 
         Err(e) => {
             let err_text = match e.as_str() {
                 "keys" => "⏳ Ожидание ключей...",
                 "decrypt" => "🔒 Ошибка расшифрования",
-                "json" => "🔒 Ошибка формата сообщения",
+                "json" => "🔒 Ошибка формата",
                 _ => "🔒 Ошибка",
             };
-            msg_block = msg_block.push(text(err_text).size(14));
+            msg_block = msg_block.push(
+                text(err_text)
+                    .size(14)
+                    .shaping(iced::widget::text::Shaping::Advanced)
+                    .font(EMOJI_FONT)
+            );
         }
     }
 
-    let bubble = container(msg_block).padding([8, 14]).style(styles::msg_bubble(is_my));
-    column![bubble].width(Length::Fill).align_x(if is_my { Alignment::End } else { Alignment::Start }).into()
+    let bubble = container(msg_block)
+        .padding([10, 16])
+        .style(styles::msg_bubble(is_my));
+        
+    column![bubble]
+        .width(Length::Fill)
+        .align_x(if is_my { Alignment::End } else { Alignment::Start })
+        .into()
 }

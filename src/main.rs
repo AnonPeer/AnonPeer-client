@@ -10,17 +10,17 @@ mod network;
 mod app;
 
 const APP_FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/NotoSansSymbols-VariableFont_wght.ttf");
-pub const APP_FONT: Font = Font::with_name("NotoSansSymbols-Regular");
+pub const APP_FONT: Font = Font::with_name("Noto Sans");
 
 const EMOJI_FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/NotoColorEmoji.ttf");
-pub const EMOJI_FONT: Font = Font::with_name("Segoe UI Emoji");
+pub const EMOJI_FONT: Font = Font::with_name("Noto Color Emoji");
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().init();
+    
     let db_path = env::var("ANON_DB").unwrap_or_else(|_| "./anon.db".into());
     let app = AppState::new(&db_path).await?;
-
     let ws_url = env::var("ANON_SERVER").unwrap_or_else(|_| app.server_address.clone());
 
     let (tx, rx) = mpsc::unbounded_channel::<ServerEvent>();

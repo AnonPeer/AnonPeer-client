@@ -92,8 +92,6 @@ pub async fn connect(
 
                             }
 
-
-
                         }
                     }
                     Ok(WsMessage::Close(_)) | Err(_) => {

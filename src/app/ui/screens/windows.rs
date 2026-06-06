@@ -317,7 +317,7 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
     let filtered: Vec<_> = model.state.messages.iter()
         .filter(|m| !m.ciphertext.is_empty() && ((m.from == my && m.to == target) || (m.to == my && m.from == target)))
         .collect();
-
+    
     let mut msg_list = Column::new().spacing(10).height(Length::Shrink);
 
     if filtered.is_empty() {
@@ -335,7 +335,7 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
     column![
         row![
             column![
-                text(target).size(16),
+                text(target).size(18).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT),
                 text("сквозное шифрование").size(11).style(styles::muted_text())
             ]
         ].padding(iced::Padding::default().bottom(10)),
@@ -352,7 +352,9 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
             UiMessage::ChatViewSend,
             UiMessage::PickImage,
         )
-    ].height(Length::Fill).into()
+    ]
+    .height(Length::Fill)
+    .into()
 }
 
 fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage> {

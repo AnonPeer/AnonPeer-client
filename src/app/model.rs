@@ -8,7 +8,6 @@ use base64::Engine;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use uuid::Uuid;
-use rodio::{OutputStream, Sink, Source};
 
 use shared::protocol::MessageContent;
 use iced::widget::image::Handle as ImageHandle;
