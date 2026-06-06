@@ -5,6 +5,13 @@ use crate::state::AppState;
 use crate::network::{ServerEvent, ClientCommand};
 use super::message::UiMessage;
 use base64::Engine;
+use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use uuid::Uuid;
+use rodio::{OutputStream, Sink, Source};
+
+use shared::protocol::MessageContent;
+use iced::widget::image::Handle as ImageHandle;
 
 pub struct Model {
     pub state: AppState,
@@ -20,6 +27,9 @@ pub struct Model {
     pub search_result: Option<(String, bool)>,
     pub search_query: String,
     pub search_matches: Vec<String>,
+    pub image_cache: Arc<RwLock<HashMap<Uuid, ImageHandle>>>,
+    pub decrypted_cache: Arc<RwLock<HashMap<Uuid, Arc<Result<MessageContent, String>>>>>,
+    pub expanded_image_id: Option<Uuid>,
 }
 
 impl Model {
@@ -47,6 +57,10 @@ impl Model {
             search_found: false,
             search_result: None,
             search_matches: Vec::new(),
+            image_cache: Arc::new(RwLock::new(HashMap::new())),
+            decrypted_cache: Arc::new(RwLock::new(HashMap::new())),
+            expanded_image_id: None,
+
         }
     }
 
@@ -65,6 +79,16 @@ impl Model {
                 self.state.status.clear(); 
                 Task::none()
             }
+
+            UiMessage::ExpandImage(id) => {
+                self.expanded_image_id = Some(id);
+                Task::none()
+            }
+            UiMessage::CloseExpandedImage => {
+                self.expanded_image_id = None;
+                Task::none()
+            }
+
             AuthUsernameChanged(v) => { 
                 if let crate::state::Screen::AuthForm { username, .. } = &mut self.state.screen { 
                     *username = v; 
@@ -194,12 +218,6 @@ impl Model {
                 Task::none()
             }
 
-
-
-
-
-
-
             UiMessage::PickImage => {
                 Task::perform(
                     async {
@@ -216,25 +234,41 @@ impl Model {
                     |path| UiMessage::ImagePicked(path),
                 )
             }
+
             UiMessage::ImagePicked(path) => {
                 if path.is_empty() {
                     return Task::none();
                 }
                 Task::perform(
                     async move {
-                        let img = match image::open(&path) {
-                            Ok(i) => i,
-                            Err(_) => return Err("Не удалось открыть изображение".to_string()),
-                        };
-                        let resized = img.resize(800, 800, image::imageops::FilterType::Lanczos3);
-                        
-                        let mut buffer = std::io::Cursor::new(Vec::new());
-                        resized.write_to(&mut buffer, image::ImageFormat::Jpeg)
-                            .map_err(|_| "Ошибка сжатия изображения".to_string())?;
-                        
-                        let bytes = buffer.into_inner();
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                        Ok(("image/jpeg".to_string(), b64))
+                        let result = tokio::task::spawn_blocking(move || {
+                            let img = match image::open(&path) {
+                                Ok(i) => i,
+                                Err(_) => return Err("Не удалось открыть изображение".to_string()),
+                            };
+                            
+                            let max_dim = 800;
+                            let (w, h) = (img.width(), img.height());
+                            let (new_w, new_h) = if w > max_dim || h > max_dim {
+                                if w > h { (max_dim, (h as f32 / w as f32 * max_dim as f32) as u32) }
+                                else { ((w as f32 / h as f32 * max_dim as f32) as u32, max_dim) }
+                            } else { (w, h) };
+
+                            let resized = img.resize(new_w, new_h, image::imageops::FilterType::Triangle);
+                            
+                            let mut buffer = std::io::Cursor::new(Vec::new());
+                            resized.write_to(&mut buffer, image::ImageFormat::Jpeg)
+                                .map_err(|_| "Ошибка сжатия".to_string())?;
+                            
+                            let bytes = buffer.into_inner();
+                            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                            Ok(("image/jpeg".to_string(), b64))
+                        }).await;
+
+                        match result {
+                            Ok(inner_res) => inner_res,
+                            Err(_) => Err("Ошибка выполнения задачи".to_string()),
+                        }
                     },
                     |res| match res {
                         Ok((mime, data)) => UiMessage::ReadyToSendImage(mime, data),
@@ -242,14 +276,7 @@ impl Model {
                     },
                 )
             }
-            UiMessage::ChatViewSend => {
-                if let crate::state::Screen::ChatView { input, .. } = &self.state.screen {
-                    if !input.trim().is_empty() {
-                        self.send_message_content(shared::protocol::MessageContent::Text(input.clone()));
-                    }
-                }
-                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
-            }
+
             UiMessage::ReadyToSendImage(mime, data) => {
                 self.send_message_content(shared::protocol::MessageContent::Image { mime_type: mime, base64_data: data });
                 scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
@@ -258,18 +285,6 @@ impl Model {
                 self.state.status = status;
                 Task::none()
             }
-
-
-
-
-
-
-
-
-
-
-
-
 
             UiMessage::SearchSubmit => {
                 if !self.search_query.trim().is_empty() {
@@ -325,27 +340,52 @@ impl Model {
                 Task::none()
             }
             UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
+ 
             NewMessage(mut msg) => {
                 msg.timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_secs();
+                    .as_secs(); 
 
                 self.state.messages.push(msg.clone());
                 let db = self.state.clone(); 
                 let m = msg.clone();
                 tokio::spawn(async move { 
-                     let _ = db.save_message(&m).await; 
+                    let _ = db.save_message(&m).await; 
                 });
+                
                 if !self.state.chats.contains(&msg.from) && self.state.username.as_ref().map_or(true, |u| u != &msg.from) {
                     self.state.chats.push(msg.from.clone()); 
                     self.state.chats.sort();
                 }
+                
                 if !self.state.peer_keys.contains_key(&msg.from) { 
-                    let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(msg.from)); 
+                    let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(msg.from.clone())); 
                 }
+
+                let my_username = self.state.username.clone().unwrap_or_default();
+                let sender = msg.from.clone();
+
+                if sender != my_username {
+                    let is_active_chat = matches!(&self.state.screen, crate::state::Screen::ChatView { target, .. } if target == &sender);
+
+                    if !is_active_chat {
+                        play_notification_sound();
+
+                        tokio::task::spawn_blocking(move || {
+                            let _ = notify_rust::Notification::new()
+                                .appname("AnonPeer")
+                                .summary(&format!("Новое сообщение от {}", sender))
+                                .body("Откройте AnonPeer, чтобы прочитать")
+                                .icon("dialog-information")
+                                .show();
+                        });
+                    }
+                }
+
                 scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
             }
+
             Disconnect => {
                 self.state.status = "Соединение разорвано".into();
                 Task::none()
@@ -457,18 +497,6 @@ impl Model {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
     fn send_message_content(&mut self, content: shared::protocol::MessageContent) {
         if let crate::state::Screen::ChatView { target, .. } = &self.state.screen {
             if let Some(user) = &self.state.username {
@@ -526,24 +554,25 @@ impl Model {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     pub fn subscription(&self) -> iced::Subscription<UiMessage> {
         use std::time::Duration;
         iced::time::every(Duration::from_millis(50)).map(|_| UiMessage::Tick)
     }
+
+}
+
+fn play_notification_sound() {
+    std::thread::spawn(|| {
+        let sound_bytes: &[u8] = include_bytes!("../../assets/sounds/notification.wav");
+
+        if let Ok((_stream, stream_handle)) = rodio::OutputStream::try_default() {
+            if let Ok(sink) = rodio::Sink::try_new(&stream_handle) {
+                let cursor = std::io::Cursor::new(sound_bytes);
+                if let Ok(source) = rodio::Decoder::new(cursor) {
+                    sink.append(source);
+                    sink.sleep_until_end();
+                }
+            }
+        }
+    });
 }

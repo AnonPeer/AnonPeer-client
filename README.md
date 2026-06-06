@@ -15,30 +15,39 @@ AnonPeer-client — это кроссплатформенное настольн
 
 ## Структура проекта
 ```
-├── app
-│   ├── component
-│   │   ├── input.rs
-│   │   ├── message.rs
-│   │   ├── mod.rs
-│   │   └── sidebar.rs
-│   ├── message.rs
-│   ├── model.rs
-│   ├── mod.rs
-│   ├── theme
-│   │   ├── colors.rs
-│   │   ├── mod.rs
-│   │   └── styles.rs
-│   ├── ui
-│   │   ├── layout.rs
-│   │   ├── mod.rs
-│   │   └── screens
-│   │       ├── mod.rs
-│   │       └── windows.rs
-│   └── windows.rs
-├── ico.ico
-├── main.rs
-├── network.rs
-└── state.rs
+├── assets
+│   ├── fonts
+│   │   ├── NotoColorEmoji.ttf
+│   │   └── NotoSansSymbols-VariableFont_wght.ttf
+│   └── sounds
+│       └── notification.wav
+├── Cargo.toml
+├── LICENSE
+├── README.md
+└── src
+    ├── app
+    │   ├── component
+    │   │   ├── input.rs
+    │   │   ├── message.rs
+    │   │   ├── mod.rs
+    │   │   └── sidebar.rs
+    │   ├── message.rs
+    │   ├── model.rs
+    │   ├── mod.rs
+    │   ├── theme
+    │   │   ├── colors.rs
+    │   │   ├── mod.rs
+    │   │   └── styles.rs
+    │   └── ui
+    │       ├── layout.rs
+    │       ├── mod.rs
+    │       └── screens
+    │           ├── mod.rs
+    │           └── windows.rs
+    ├── ico.ico
+    ├── main.rs
+    ├── network.rs
+    └── state.rs
 ```
 ## 🚀 Установка
 

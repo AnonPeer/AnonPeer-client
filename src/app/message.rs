@@ -34,6 +34,8 @@ pub enum UiMessage {
     SearchResultSelected(String),
     SearchResultsReceived(Vec<String>),
 
+    ExpandImage(uuid::Uuid),
+    CloseExpandedImage,
 
     FetchKeysFor(String),
     KeysReceived { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },

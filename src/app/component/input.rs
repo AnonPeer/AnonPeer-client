@@ -8,7 +8,7 @@ pub fn chat_input<'a>(
     placeholder: &'a str,
     on_input: impl Fn(String) -> UiMessage + 'a,
     on_submit: UiMessage,
-    on_attach: UiMessage, // <-- Новый параметр
+    on_attach: UiMessage,
 ) -> Element<'a, UiMessage> {
     row![
         button(text("📎").size(16))

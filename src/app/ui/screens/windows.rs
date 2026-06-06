@@ -5,8 +5,7 @@ use crate::app::message::UiMessage;
 use crate::app::theme::styles;
 use crate::app::component::sidebar;
 use crate::state::Screen;
-use crate::EMOJI_FONT; 
-
+use crate::EMOJI_FONT;
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     let base_layout = match &model.state.screen {
@@ -16,14 +15,15 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         }
         _ => view_app_shell(model),
     };
+
+    let mut final_view = base_layout;
+
     if model.show_settings {
         let dimmer = button(row![])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_, _| iced::widget::button::Style {
-                background: Some(
-                    iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()
-                ),
+                background: Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()),
                 ..Default::default()
             })
             .on_press(UiMessage::ToggleSettings);
@@ -33,15 +33,40 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
             .height(Length::Fill)
             .align_y(Alignment::End);
 
-        iced::widget::stack![
-            base_layout,
-            dimmer,
-            bottom_panel
-        ]
-        .into()
-    } else {
-        base_layout
+        final_view = iced::widget::stack![final_view, dimmer, bottom_panel].into();
     }
+
+    if let Some(img_id) = model.expanded_image_id {
+        let handle_opt = {
+            let cache = model.image_cache.read().unwrap();
+            cache.get(&img_id).cloned()
+        };
+
+        if let Some(handle) = handle_opt {
+            let img_dimmer = button(row![])
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_, _| iced::widget::button::Style {
+                    background: Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.85).into()),
+                    ..Default::default()
+                })
+                .on_press(UiMessage::CloseExpandedImage);
+
+            let expanded_img = iced::widget::Image::new(handle)
+                .width(Length::Fill)
+                .height(Length::Fill);
+
+            let img_content = container(expanded_img)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill);
+
+            final_view = iced::widget::stack![final_view, img_dimmer, img_content].into();
+        }
+    }
+
+    final_view
 }
 
 
@@ -303,7 +328,7 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
         );
     } else {
         for m in filtered {
-            msg_list = msg_list.push(crate::app::component::message::view_bubble(m, &model.state, my));
+            msg_list = msg_list.push(crate::app::component::message::view_bubble(m, model, my));
         }
     }
 

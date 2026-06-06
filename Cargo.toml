@@ -19,3 +19,8 @@ futures-util = "0.3"
 rfd = "0.14"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 base64 = "0.22"
+notify-rust = "4"
+rodio = "0.19"
+
+[package.metadata.appimage]
+assets = "appimage"
