@@ -314,24 +314,21 @@ fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -
 
 fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Element<'a, UiMessage> {
     let my = model.state.username.as_deref().unwrap_or("");
-    let my_local = my.split('@').next().unwrap_or(my); // Извлекаем локальную часть имени (до @)
+    let my_local = my.split('@').next().unwrap_or(my); 
     
     let filtered: Vec<_> = model.state.messages.iter()
         .filter(|m| {
             if m.ciphertext.is_empty() { return false; }
             
-            // Извлекаем локальные части имен отправителя и получателя
             let from_local = m.from.split('@').next().unwrap_or(&m.from);
             let to_local = m.to.split('@').next().unwrap_or(&m.to);
             
-            // Сравниваем локальные части, чтобы "testeA" совпадало с "testeA@127.0.0.1:3001"
             (from_local == my_local && m.to == target) || (to_local == my_local && m.from == target)
         })
         .collect();
     
     let mut msg_list = Column::new().spacing(10).height(Length::Shrink);
 
-    // Вычисляем код безопасности
     let sas_display = if let Some(sas) = model.state.get_sas_code(target) {
         format!("🔒 Код безопасности: {} (совпадает = безопасно)", sas)
     } else {
@@ -389,7 +386,6 @@ fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage
             .on_input(UiMessage::NewChatInputChanged)
             .on_submit(UiMessage::NewChatSubmit)
             .padding(12),
-        // ... остальной код без изменений ...
     ])
     .width(Length::Fill)
     .height(Length::Fill)
