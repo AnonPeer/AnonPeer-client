@@ -385,7 +385,6 @@ impl Model {
                     }
                 }
 
-                // Принудительно обновляем UI, если добавили новый чат
                 if should_update {
                     Task::batch(vec![
                         scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX }),
@@ -405,7 +404,6 @@ impl Model {
                 Task::done(UiMessage::KeysReceived { target, ed_public, x25519_public })
             }
             SearchResults(matches) => {
-                // Фильтруем дубликаты и добавляем в список
                 let mut unique_matches: Vec<String> = matches.into_iter().collect();
                 unique_matches.sort();
                 unique_matches.dedup();
