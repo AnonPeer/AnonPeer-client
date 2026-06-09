@@ -34,7 +34,6 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         for name in &model.search_matches {
             let name_owned = name.clone(); 
             
-            // Проверяем, есть ли домен в имени
             let display_name = if name.contains('@') {
                 name.clone()
             } else {
