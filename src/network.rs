@@ -116,8 +116,8 @@ pub async fn connect(
                     ClientCommand::FetchPeerKeys(t) => ClientPayload::RequestKeys { target: t },
                     ClientCommand::UpdateServerAddress(_) => unreachable!(),
                     ClientCommand::SearchUser(u) => ClientPayload::SearchUser { username: u },
-                    ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p },
-                    ClientCommand::ValidateSession(session_id) => ClientPayload::ValidateSession { session_id }, // <--- ДОБАВИТЬ ЭТУ СТРОКУ
+                    ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p }, <--
+                    ClientCommand::ValidateSession(session_id) => ClientPayload::ValidateSession { session_id }, 
                 };
                 if let Ok(json) = serde_json::to_string(&payload) {
                     if ws_sender.send(WsMessage::Text(json)).await.is_err() {
