@@ -33,8 +33,16 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         let mut dropdown = Column::new().spacing(2).padding(4);
         for name in &model.search_matches {
             let name_owned = name.clone(); 
+            
+            // Проверяем, есть ли домен в имени
+            let display_name = if name.contains('@') {
+                name.clone()
+            } else {
+                name.clone()
+            };
+            
             dropdown = dropdown.push(
-                button(text(name.clone()).size(14).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT))
+                button(text(display_name).size(14).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT))
                     .width(Length::Fill)
                     .padding([8, 12])
                     .style(styles::surface_button())

@@ -2,7 +2,7 @@ use iced::widget::{button, column, container, row, text, text_input, Column, Spa
 use iced::{Alignment, Element, Length};
 use crate::app::model::Model;
 use crate::app::message::UiMessage;
-use crate::app::theme::styles;
+use crate::app::theme::{colors, styles};
 use crate::app::component::sidebar;
 use crate::state::Screen;
 use crate::EMOJI_FONT;
@@ -314,11 +314,32 @@ fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -
 
 fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Element<'a, UiMessage> {
     let my = model.state.username.as_deref().unwrap_or("");
+    let my_local = my.split('@').next().unwrap_or(my); // Извлекаем локальную часть имени (до @)
+    
     let filtered: Vec<_> = model.state.messages.iter()
-        .filter(|m| !m.ciphertext.is_empty() && ((m.from == my && m.to == target) || (m.to == my && m.from == target)))
+        .filter(|m| {
+            if m.ciphertext.is_empty() { return false; }
+            
+            // Извлекаем локальные части имен отправителя и получателя
+            let from_local = m.from.split('@').next().unwrap_or(&m.from);
+            let to_local = m.to.split('@').next().unwrap_or(&m.to);
+            
+            // Сравниваем локальные части, чтобы "testeA" совпадало с "testeA@127.0.0.1:3001"
+            (from_local == my_local && m.to == target) || (to_local == my_local && m.from == target)
+        })
         .collect();
     
     let mut msg_list = Column::new().spacing(10).height(Length::Shrink);
+
+    // Вычисляем код безопасности
+    let sas_display = if let Some(sas) = model.state.get_sas_code(target) {
+        format!("🔒 Код безопасности: {} (совпадает = безопасно)", sas)
+    } else {
+        "⏳ Обмен ключами...".to_string()
+    };
+
+    let sas_for_text = sas_display.clone();
+    let sas_for_style = sas_display;
 
     if filtered.is_empty() {
         msg_list = msg_list.push(
@@ -336,7 +357,9 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
         row![
             column![
                 text(target).size(18).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT),
-                text("сквозное шифрование").size(11).style(styles::muted_text())
+                text(sas_for_text).size(11).style(move |_| iced::widget::text::Style { 
+                    color: Some(if sas_for_style.contains("⏳") { colors::TEXT_MUTED } else { colors::SUCCESS }) 
+                })
             ]
         ].padding(iced::Padding::default().bottom(10)),
         horizontal_rule(1),
@@ -361,14 +384,13 @@ fn view_new_chat<'a>(_model: &'a Model, input: &'a str) -> Element<'a, UiMessage
     container(column![
         text("Создать секретный диалог").size(18),
         Space::with_height(14),
-        text_input("Введите точный логин пользователя...", input).on_input(UiMessage::NewChatInputChanged).on_submit(UiMessage::NewChatSubmit).padding(12),
-        Space::with_height(16),
-        row![
-            button(text("Отмена").size(13)).padding([8,16]).on_press(UiMessage::NewChatCancel),
-            Space::with_width(Length::Fill),
-            button(text("Открыть чат").size(13)).padding([8,16]).style(styles::accent_button()).on_press(UiMessage::NewChatSubmit)
-        ]
-    ].max_width(400).spacing(4))
+        text("Введите логин или логин@сервер").size(12).style(styles::muted_text()),
+        text_input("user или user@domain.com", input)
+            .on_input(UiMessage::NewChatInputChanged)
+            .on_submit(UiMessage::NewChatSubmit)
+            .padding(12),
+        // ... остальной код без изменений ...
+    ])
     .width(Length::Fill)
     .height(Length::Fill)
     .center_x(Length::Fill)

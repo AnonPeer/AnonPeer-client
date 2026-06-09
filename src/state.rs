@@ -89,7 +89,7 @@ impl AppState {
         let server_address = match saved_address {
             Some((addr,)) => addr,
             None => {
-                let default_addr = "ws://127.0.0.1:8080/ws".to_string();
+                let default_addr = "ws://144.31.215.157:3000/ws".to_string();
                 let _ = sqlx::query("INSERT OR REPLACE INTO server_config (id, address) VALUES ('current', $1)")
                     .bind(&default_addr).execute(&db).await;
                 default_addr
@@ -225,4 +225,17 @@ impl AppState {
         }
         self.peer_public_keys.get(sender).map(|k| k.as_slice())
     }
+
+
+
+    pub fn get_sas_code(&self, target: &str) -> Option<String> {
+        let keys = self.peer_keys.get(target)?;
+        shared::crypto::generate_sas(&self.x25519_secret, &keys.x25519_public).ok()
+    }
+
+
+
+
+
+
 }

@@ -124,7 +124,7 @@ impl Model {
             };
             self.state.status.clear();
             if !self.state.peer_keys.contains_key(&t) { 
-                let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t)); 
+                let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t.clone())); 
             }
             scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
         }
@@ -344,7 +344,7 @@ impl Model {
                 msg.timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_secs(); 
+                    .as_secs();  
 
                 self.state.messages.push(msg.clone());
                 let db = self.state.clone(); 
@@ -353,16 +353,19 @@ impl Model {
                     let _ = db.save_message(&m).await; 
                 });
                 
-                if !self.state.chats.contains(&msg.from) && self.state.username.as_ref().map_or(true, |u| u != &msg.from) {
+                let my_username = self.state.username.as_deref().unwrap_or("");
+                let mut should_update = false;
+                
+                if msg.from != my_username && !self.state.chats.contains(&msg.from) {
                     self.state.chats.push(msg.from.clone()); 
                     self.state.chats.sort();
+                    should_update = true;
                 }
                 
                 if !self.state.peer_keys.contains_key(&msg.from) { 
                     let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(msg.from.clone())); 
                 }
 
-                let my_username = self.state.username.clone().unwrap_or_default();
                 let sender = msg.from.clone();
 
                 if sender != my_username {
@@ -374,15 +377,23 @@ impl Model {
                         tokio::task::spawn_blocking(move || {
                             let _ = notify_rust::Notification::new()
                                 .appname("AnonPeer")
-                                .summary(&format!("Новое сообщение от {}", sender))
-                                .body("Откройте AnonPeer, чтобы прочитать")
-                                .icon("dialog-information")
+                                .summary(&format!("Новое сообщение от {} ", sender))
+                                .body("Откройте AnonPeer, чтобы прочитать ")
+                                .icon("dialog-information ")
                                 .show();
                         });
                     }
                 }
 
-                scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+                // Принудительно обновляем UI, если добавили новый чат
+                if should_update {
+                    Task::batch(vec![
+                        scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX }),
+                        Task::done(UiMessage::Tick)
+                    ])
+                } else {
+                    scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
+                }
             }
 
             Disconnect => {
@@ -394,7 +405,12 @@ impl Model {
                 Task::done(UiMessage::KeysReceived { target, ed_public, x25519_public })
             }
             SearchResults(matches) => {
-                Task::done(UiMessage::SearchResultsReceived(matches))
+                // Фильтруем дубликаты и добавляем в список
+                let mut unique_matches: Vec<String> = matches.into_iter().collect();
+                unique_matches.sort();
+                unique_matches.dedup();
+                
+                Task::done(UiMessage::SearchResultsReceived(unique_matches))
             }
         }
     }
