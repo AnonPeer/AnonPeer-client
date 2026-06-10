@@ -62,17 +62,17 @@ AnonPeer-client — это кроссплатформенное настольн
 
 ```bash
 git clone https://github.com/AnonPeer/AnonPeer-client.git
-cd AnonPeer-client
+git clone https://github.com/AnonPeer/AnonPeer-shared.git
+mv AnonPeer-client client
+mv AnonPeer-shared shared
 cargo build --release
 ```
 ## Запуск
 
 ### Windows
- $env:ANON_SERVER="ws://144.31.215.157:3000/ws"
  cargo run --release
 
 ### Linux
- ANON_SERVER="ws://144.31.215.157:3000/ws"
  cargo run --release
 
 ## 📄 Лицензия
