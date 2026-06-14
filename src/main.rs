@@ -1,45 +1,67 @@
 use std::env;
 use tokio::sync::mpsc;
 use tracing_subscriber;
-use crate::state::AppState;
-use crate::network::{ClientCommand, ServerEvent};
 use iced::{Font, Settings};
+use std::sync::Arc;
 
-mod state;
+mod domain;
+mod infrastructure;
 mod network;
 mod app;
 
-const APP_FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/NotoSansSymbols-VariableFont_wght.ttf");
-pub const APP_FONT: Font = Font::with_name("Noto Sans");
-
-const EMOJI_FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/NotoColorEmoji.ttf");
-pub const EMOJI_FONT: Font = Font::with_name("Noto Color Emoji");
+const NOTO_SANS_BYTES: &[u8] = include_bytes!("../assets/fonts/NotoSans-Regular.ttf");
+pub const NOTO_SANS: Font = Font::with_name("Noto Sans");
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().init();
     
     let db_path = env::var("ANON_DB").unwrap_or_else(|_| "./anon.db".into());
-    let app = AppState::new(&db_path).await?;
-    let ws_url = env::var("ANON_SERVER").unwrap_or_else(|_| app.server_address.clone());
+    let db = Arc::new(infrastructure::db::DbManager::new(&db_path).await?);
+    
+    let keys = db.get_or_generate_keys().await?;
+    let server_address = db.get_server_address().await?;
+    let saved_session = db.get_saved_session().await?;
+    
+    let mut state = domain::state::AppState::new_default(
+        server_address.clone(), 
+        saved_session.clone(), 
+        keys
+    );
+    
+    if let Ok(history) = db.load_history().await {
+        for msg in history {
+            if !state.chats.contains(&msg.from) { state.chats.push(msg.from.clone()); }
+            if !state.chats.contains(&msg.to) { state.chats.push(msg.to.clone()); }
+            state.messages.push(msg);
+        }
+        state.chats.sort();
+        state.chats.dedup();
+    }
+    
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::unbounded_channel();
+    
+    if let Some((username, session_id)) = &state.saved_session {
+        let _ = cmd_tx.send(network::ClientCommand::ValidateSession(session_id.clone()));
+        state.username = Some(username.clone());
+        state.session_id = Some(session_id.clone());
+        state.screen = domain::state::Screen::ChatList;
+    }
 
-    let (tx, rx) = mpsc::unbounded_channel::<ServerEvent>();
-    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<ClientCommand>();
-
-    let app_net = app.clone();
-    let tx_net = tx.clone();
+    let net_state = state.clone();
+    let net_tx = tx.clone();
     tokio::spawn(async move {
-        if let Err(e) = crate::network::connect(&ws_url, &app_net, tx_net, cmd_rx).await {
+        if let Err(e) = network::connect(&net_state.server_address, &net_state, net_tx, cmd_rx).await {
             tracing::error!("Network error: {}", e);
         }
     });
 
     let mut settings = Settings::default();
-    settings.fonts.push(std::borrow::Cow::Borrowed(APP_FONT_BYTES));
-    settings.fonts.push(std::borrow::Cow::Borrowed(EMOJI_FONT_BYTES));
-    settings.default_font = APP_FONT;
+    settings.fonts.push(std::borrow::Cow::Borrowed(NOTO_SANS_BYTES));
+    settings.default_font = NOTO_SANS;
 
-    app::run(app, rx, cmd_tx)?;
+    app::run(state, db, rx, cmd_tx)?;
 
     Ok(())
 }

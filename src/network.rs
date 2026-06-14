@@ -11,13 +11,14 @@ pub enum ServerEvent {
     NewMessage(AppMessage),
     PeerKeys { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },
     Disconnect,
-    SearchResults(Vec<UserInfo>), // <-- ДОЛЖНО БЫТЬ Vec<UserInfo>
+    SearchResults(Vec<UserInfo>),
     ProfileReceived(UserInfo),
+    ProfileUpdated,
 }
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
-    Register(String, String, String, Vec<u8>, Vec<u8>), // <-- 5 аргументов: nickname, username, password, ed, x25519
+    Register(String, String, String, Vec<u8>, Vec<u8>),
     Login(String, String, Vec<u8>, Vec<u8>),
     Send(AppMessage),
     FetchPeerKeys(String),
@@ -25,11 +26,12 @@ pub enum ClientCommand {
     SearchPrefix(String),
     ValidateSession(String),
     RequestProfile(String),
+    UpdateProfile { bio: Option<String>, avatar_base64: Option<String> },
 }
 
 pub async fn connect(
     initial_url: &str,
-    _state: &crate::state::AppState,
+    _state: &crate::domain::state::AppState,
     tx: mpsc::UnboundedSender<ServerEvent>,
     mut cmd_rx: mpsc::UnboundedReceiver<ClientCommand>
 ) -> Result<(), AnonError> {
@@ -82,6 +84,9 @@ pub async fn connect(
                                         let _ = tx_clone.send(ServerEvent::ProfileReceived(u));
                                     }
                                 }
+                                ServerPayload::ProfileUpdated => {
+                                    let _ = tx_clone.send(ServerEvent::ProfileUpdated);
+                                }
                             }
                         }
                     }
@@ -109,6 +114,7 @@ pub async fn connect(
                     ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p },
                     ClientCommand::ValidateSession(session_id) => ClientPayload::ValidateSession { session_id }, 
                     ClientCommand::RequestProfile(username) => ClientPayload::RequestProfile { username },
+                    ClientCommand::UpdateProfile { bio, avatar_base64 } => ClientPayload::UpdateProfile { bio, avatar_base64 },
                 };
                 if let Ok(json) = serde_json::to_string(&payload) {
                     if ws_sender.send(WsMessage::Text(json)).await.is_err() {

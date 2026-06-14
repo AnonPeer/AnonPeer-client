@@ -6,22 +6,18 @@ pub enum UiMessage {
     Network(ServerEvent),
     Tick,
 
-
-
-
-
-
     AuthNicknameChanged(String), 
-
 
     ViewProfile(String),         
     ProfileReceived(UserInfo),   
-    CloseProfile,                
+    CloseProfile,
 
-
-
-
-
+    OpenEditProfile,
+    EditProfileBioChanged(String),
+    EditProfileAvatarPicked(String),
+    EditProfileAvatarReady(String),
+    EditProfileSave,
+    ProfileUpdated(UserInfo),
 
     MainMenuSelect(usize),
     AuthUsernameChanged(String),

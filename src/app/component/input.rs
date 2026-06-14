@@ -2,7 +2,7 @@ use iced::widget::{button, row, text, text_input, container};
 use iced::{Alignment, Element, Length};
 use crate::app::message::UiMessage;
 use crate::app::theme::styles;
-use crate::EMOJI_FONT;
+use crate::NOTO_SANS;
 
 pub fn chat_input<'a>(
     input: &'a str,
@@ -13,7 +13,7 @@ pub fn chat_input<'a>(
 ) -> Element<'a, UiMessage> {
     container(
         row![
-            button(text("").size(18).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT))
+            button(text("").size(18).shaping(iced::widget::text::Shaping::Advanced).font(NOTO_SANS))
                 .padding(10)
                 .style(styles::icon_button())
                 .on_press(on_attach),
@@ -26,7 +26,7 @@ pub fn chat_input<'a>(
                 .width(Length::Fill)
                 .style(styles::modern_text_input()),
             
-            button(text("󰒊").size(18).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT))
+            button(text("󰒊").size(18).shaping(iced::widget::text::Shaping::Advanced).font(NOTO_SANS))
                 .padding(10)
                 .style(styles::accent_button())
                 .on_press(on_submit)

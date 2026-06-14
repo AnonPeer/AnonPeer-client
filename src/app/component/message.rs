@@ -5,7 +5,7 @@ use shared::crypto::decrypt_verify;
 use crate::app::message::UiMessage;
 use crate::app::model::Model;
 use crate::app::theme::{colors, styles};
-use crate::EMOJI_FONT;
+use crate::NOTO_SANS;
 use chrono::TimeZone;
 use base64::Engine;
 use std::sync::Arc;
@@ -31,8 +31,7 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
             button(text(display_name)
                 .size(12)
                 .style(|_| iced::widget::text::Style { color: Some(colors::ACCENT) })
-                .shaping(iced::widget::text::Shaping::Advanced)
-                .font(EMOJI_FONT))
+                .shaping(iced::widget::text::Shaping::Advanced))
             .style(|_, _| iced::widget::button::Style {
                 background: Some(iced::Color::TRANSPARENT.into()),
                 ..Default::default()
@@ -81,8 +80,7 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                 row![
                     text(t.clone())
                         .size(15)
-                        .shaping(iced::widget::text::Shaping::Advanced)
-                        .font(EMOJI_FONT), 
+                        .shaping(iced::widget::text::Shaping::Advanced),
                     Space::with_width(16), 
                     text(time_str)
                         .size(11)
@@ -145,7 +143,7 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                 text(err_text)
                     .size(14)
                     .shaping(iced::widget::text::Shaping::Advanced)
-                    .font(EMOJI_FONT)
+                    .font(NOTO_SANS)
             );
         }
     }

@@ -4,8 +4,9 @@ use crate::app::model::Model;
 use crate::app::message::UiMessage;
 use crate::app::theme::{colors, styles};
 use crate::app::component::sidebar;
-use crate::state::Screen;
-use crate::EMOJI_FONT;
+use crate::domain::state::Screen;
+use crate::NOTO_SANS;
+use base64::Engine as _;
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     
@@ -17,6 +18,7 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
             view_auth(model, *is_register, nickname.as_str(), username.as_str(), password.as_str())
         }
         Screen::UserProfile { username } => view_profile(model, username.as_str()),
+        Screen::EditProfile => view_edit_profile(model),
         _ => view_app_shell(model),
     };
 
@@ -129,16 +131,25 @@ fn view_app_shell<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .into()
 }
 
-fn view_hamburger_panel<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
+fn view_hamburger_panel<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+    let my_username = model.state.username.as_deref().unwrap_or("");
     container(
         column![
             text("Меню").size(18).style(styles::muted_text()),
             horizontal_rule(1),
             Space::with_height(12),
+            button(
+                row![
+                    text("👤").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                    text("Мой профиль").size(14)
+                ].spacing(8)
+            )
+            .width(Length::Fill).padding([10, 12]).style(styles::surface_button())
+            .on_press(UiMessage::ViewProfile(my_username.to_string())),
             Space::with_height(6),
             button(
                 row![
-                    text("🌓").font(EMOJI_FONT).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                    text("🌓").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
                     text("Сменить тему").size(14)
                 ].spacing(8)
             )
@@ -147,7 +158,7 @@ fn view_hamburger_panel<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
             Space::with_height(Length::Fill),
             button(
                 row![
-                    text("⚙️").font(EMOJI_FONT).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                    text("⚙️").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
                     text("Настройки").size(14)
                 ].spacing(8)
             )
@@ -183,7 +194,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
                 Space::with_height(10),
                 button(
                     row![
-                        text("🔔").font(EMOJI_FONT).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                        text("🔔").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
                         text("Уведомления").size(14)
                     ].spacing(8)
                 )
@@ -192,7 +203,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
                 .style(styles::surface_button()),
                 button(
                     row![
-                        text("🔐").font(EMOJI_FONT).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                        text("🔐").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
                         text("Конфиденциальность").size(14)
                     ].spacing(8)
                 )
@@ -201,7 +212,7 @@ fn view_settings_content<'a>(model: &'a Model) -> Element<'a, UiMessage> {
                 .style(styles::surface_button()),
                 button(
                     row![
-                        text("💾").font(EMOJI_FONT).size(16).shaping(iced::widget::text::Shaping::Advanced),
+                        text("💾").font(NOTO_SANS).size(16).shaping(iced::widget::text::Shaping::Advanced),
                         text("Данные и память").size(14)
                     ].spacing(8)
                 )
@@ -252,7 +263,7 @@ fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
 
     let settings_button = button(
         row![
-            text("⚙️").font(EMOJI_FONT).size(14).shaping(iced::widget::text::Shaping::Advanced),
+            text("⚙️").font(NOTO_SANS).size(14).shaping(iced::widget::text::Shaping::Advanced),
             text("Настройки сервера").size(13)
         ].spacing(6)
     )
@@ -376,15 +387,46 @@ fn view_chat_view<'a>(model: &'a Model, target: &'a str, input: &'a str) -> Elem
         }
     }
 
-    column![
+    let target_nickname = model.state.nickname_cache.get(target).cloned().unwrap_or_else(|| target.to_string());
+    let target_avatar = model.state.avatar_cache.get(target).and_then(|a| a.as_deref());
+
+    let target_first = target_nickname.chars().next().unwrap_or('?').to_uppercase().to_string();
+    let header_avatar_size = 32.0;
+    let header_avatar: Element<'_, UiMessage> = if let Some(b64) = target_avatar {
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+            let handle = iced::widget::image::Handle::from_bytes(bytes);
+            container(Image::new(handle).width(Length::Fixed(header_avatar_size)).height(Length::Fixed(header_avatar_size)))
+                .width(Length::Fixed(header_avatar_size))
+                .height(Length::Fixed(header_avatar_size))
+                .style(move |_: &iced::Theme| container::Style {
+                    border: iced::Border { radius: (header_avatar_size / 2.0).into(), width: 0.0, color: iced::Color::TRANSPARENT },
+                    ..Default::default()
+                })
+                .into()
+        } else {
+            make_letter_avatar(target_first.clone(), header_avatar_size).into()
+        }
+    } else {
+        make_letter_avatar(target_first.clone(), header_avatar_size).into()
+    };
+
+    let header = button(
         row![
+            header_avatar,
+            Space::with_width(10),
             column![
-                text(target).size(18).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT),
+                text(target_nickname).size(16).shaping(iced::widget::text::Shaping::Advanced),
                 text(sas_for_text).size(11).style(move |_| iced::widget::text::Style { 
                     color: Some(if sas_for_style.contains("⏳") { colors::TEXT_MUTED } else { colors::SUCCESS }) 
                 })
             ]
-        ].padding(iced::Padding::default().bottom(10)),
+        ].align_y(Alignment::Center)
+    )
+    .padding(iced::Padding::default().bottom(10).top(4))
+    .on_press(UiMessage::ViewProfile(target.to_string()));
+
+    column![
+        header,
         horizontal_rule(1),
         Space::with_height(10),
         Scrollable::new(msg_list)
@@ -453,34 +495,210 @@ fn view_empty<'a>() -> Element<'a, UiMessage> {
 
 fn view_profile<'a>(model: &'a Model, username: &'a str) -> Element<'a, UiMessage> {
     let nickname = model.state.nickname_cache.get(username).cloned().unwrap_or_else(|| "Загрузка...".to_string());
-    
-    container(column![
+    let bio = model.state.bio_cache.get(username).cloned().unwrap_or_default();
+    let avatar = model.state.avatar_cache.get(username).and_then(|a| a.as_deref());
+    let last_seen = model.state.last_seen_cache.get(username).and_then(|v| *v);
+    let is_me = model.state.username.as_deref() == Some(username);
+
+    let avatar_widget = render_avatar_large(avatar, &nickname);
+
+    let last_seen_text = if is_me {
+        "В сети".to_string()
+    } else if let Some(ts) = last_seen {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let diff = now.saturating_sub(ts);
+        if diff < 60 {
+            "в сети".to_string()
+        } else if diff < 3600 {
+            format!("был(а) в сети {} мин. назад", diff / 60)
+        } else if diff < 86400 {
+            format!("был(а) в сети {} ч. назад", diff / 3600)
+        } else {
+            format!("был(а) в сети {} дн. назад", diff / 86400)
+        }
+    } else {
+        String::new()
+    };
+
+    let mut profile_col = column![
         row![
             button(text("← Назад").size(14))
                 .padding([10, 20])
                 .style(styles::surface_button())
                 .on_press(UiMessage::CloseProfile),
             Space::with_width(Length::Fill),
-        ],
-        Space::with_height(40),
-        container(
-            column![
-                text(nickname).size(28).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT),
-                text(format!("@{}", username)).size(16).style(styles::muted_text()),
-                Space::with_height(20),
-                button(text("Написать сообщение").size(14))
-                    .padding([12, 24])
+            if is_me {
+                button(text("✏️ Редактировать").size(13).shaping(iced::widget::text::Shaping::Advanced))
+                    .padding([8, 14])
                     .style(styles::accent_button())
-                    .on_press(UiMessage::ChatSelected(username.to_string())),
-            ]
-            .align_x(Alignment::Center)
-        )
-        .padding(40)
-        .style(styles::surface_container())
-    ])
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
-    .into()
+                    .on_press(UiMessage::OpenEditProfile)
+            } else {
+                button(text("")).padding(0)
+            }
+        ],
+        Space::with_height(30),
+        avatar_widget,
+        Space::with_height(16),
+        text(nickname).size(26).shaping(iced::widget::text::Shaping::Advanced),
+        text(format!("@{}", username)).size(15).style(styles::muted_text()),
+        Space::with_height(8),
+        text(last_seen_text).size(13).style(styles::muted_text()),
+    ].align_x(Alignment::Center);
+
+    if !bio.is_empty() {
+        profile_col = profile_col
+            .push(Space::with_height(20))
+            .push(
+                container(column![
+                    text("О себе").size(12).style(styles::muted_text()),
+                    Space::with_height(4),
+                    text(bio).size(15).shaping(iced::widget::text::Shaping::Advanced),
+                ].spacing(4))
+                .padding(16)
+                .width(Length::Fill)
+                .max_width(400.0)
+                .style(styles::surface_container())
+            );
+    }
+
+    if !is_me {
+        profile_col = profile_col
+            .push(Space::with_height(24))
+            .push(
+                button(text("Написать сообщение").size(14))
+                    .padding([12, 32])
+                    .style(styles::accent_button())
+                    .on_press(UiMessage::ChatSelected(username.to_string()))
+            );
+    }
+
+    container(Scrollable::new(profile_col).spacing(4))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into()
+}
+
+fn view_edit_profile<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+    let current_avatar = model.state.edit_avatar_base64.as_deref();
+    let nickname = model.state.nickname.as_deref().unwrap_or("Аноним");
+
+    let avatar_section: Element<'a, UiMessage> = if let Some(b64) = current_avatar {
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+            let handle = iced::widget::image::Handle::from_bytes(bytes);
+            container(
+                Image::new(handle)
+                    .width(Length::Fixed(100.0))
+                    .height(Length::Fixed(100.0))
+            )
+            .width(Length::Fixed(100.0))
+            .height(Length::Fixed(100.0))
+            .style(|_: &iced::Theme| container::Style {
+                border: iced::Border { radius: 50.0.into(), width: 0.0, color: iced::Color::TRANSPARENT },
+                ..Default::default()
+            })
+            .into()
+        } else {
+            render_avatar_large(None, nickname)
+        }
+    } else {
+        render_avatar_large(None, nickname)
+    };
+
+    let content = column![
+        row![
+            button(text("← Назад").size(14))
+                .padding([10, 20])
+                .style(styles::surface_button())
+                .on_press(UiMessage::CloseProfile),
+            Space::with_width(Length::Fill),
+            text("Редактирование профиля").size(18).style(styles::muted_text()),
+            Space::with_width(Length::Fill),
+        ],
+        Space::with_height(30),
+        container(avatar_section)
+            .center_x(Length::Fill),
+        Space::with_height(10),
+        button(text("📷 Изменить аватар").size(13))
+            .padding([8, 16])
+            .style(styles::surface_button())
+            .on_press(UiMessage::PickImage),
+        Space::with_height(24),
+        text("Имя").size(13).style(styles::muted_text()),
+        text(nickname).size(16).shaping(iced::widget::text::Shaping::Advanced),
+        Space::with_height(4),
+        text("(имя задаётся при регистрации)").size(11).style(styles::muted_text()),
+        Space::with_height(20),
+        text("О себе").size(13).style(styles::muted_text()),
+        container(
+            text_input("Расскажите о себе...", &model.state.edit_bio)
+                .on_input(UiMessage::EditProfileBioChanged)
+                .padding(12)
+                .width(Length::Fill)
+        ).width(Length::Fill).max_width(400.0),
+        Space::with_height(30),
+        button(text("Сохранить").size(14))
+            .padding([12, 32])
+            .style(styles::accent_button())
+            .on_press(UiMessage::EditProfileSave),
+    ].spacing(4).max_width(420);
+
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into()
+}
+
+fn make_letter_avatar(letter: String, size: f32) -> iced::widget::Container<'static, UiMessage> {
+    container(text(letter).size(14).shaping(iced::widget::text::Shaping::Advanced))
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size))
+        .center_x(Length::Fixed(size))
+        .center_y(Length::Fixed(size))
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(colors::ACCENT)),
+            text_color: Some(colors::TEXT_LIGHT),
+            border: iced::Border { radius: (size / 2.0).into(), width: 0.0, color: iced::Color::TRANSPARENT },
+            ..Default::default()
+        })
+}
+
+fn render_avatar_large<'a>(avatar_b64: Option<&str>, label: &str) -> Element<'a, UiMessage> {
+    let size = 100.0;
+    if let Some(b64) = avatar_b64 {
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+            let handle = iced::widget::image::Handle::from_bytes(bytes);
+            return container(
+                Image::new(handle)
+                    .width(Length::Fixed(size))
+                    .height(Length::Fixed(size))
+            )
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .style(move |_| container::Style {
+                border: iced::Border { radius: (size / 2.0).into(), width: 0.0, color: iced::Color::TRANSPARENT },
+                ..Default::default()
+            })
+            .into();
+        }
+    }
+    let first = label.chars().next().unwrap_or('?').to_uppercase().to_string();
+    container(text(first).size(40).shaping(iced::widget::text::Shaping::Advanced))
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size))
+        .center_x(Length::Fixed(size))
+        .center_y(Length::Fixed(size))
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(colors::ACCENT)),
+            text_color: Some(colors::TEXT_LIGHT),
+            border: iced::Border { radius: (size / 2.0).into(), width: 0.0, color: iced::Color::TRANSPARENT },
+            ..Default::default()
+        })
+        .into()
 }
