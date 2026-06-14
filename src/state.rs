@@ -10,10 +10,11 @@ pub enum FocusedField { Username, Password }
 #[derive(Clone, Debug)]
 pub enum Screen {
     MainMenu { selection: usize },
-    AuthForm { is_register: bool, username: String, password: String, focused: FocusedField },
+    AuthForm { is_register: bool, username: String, nickname: String, password: String, focused: FocusedField },
     ChatList,
     NewChat { input: String },
     ChatView { target: String, input: String },
+    UserProfile { username: String },
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,7 @@ pub struct AppState {
     pub session_id: Option<String>,
     pub ed_secret: Vec<u8>,
     pub ed_public: Vec<u8>,
+    pub nickname: Option<String>, 
     pub x25519_secret: Vec<u8>,
     pub x25519_public: Vec<u8>,
     pub chats: Vec<String>,
@@ -39,6 +41,8 @@ pub struct AppState {
     pub peer_public_keys: std::collections::HashMap<String, Vec<u8>>,
     pub server_address: String,
     pub saved_session: Option<(String, String)>, 
+    pub nickname_cache: std::collections::HashMap<String, String>, 
+    
 }
 
 impl AppState {
@@ -106,6 +110,8 @@ impl AppState {
             peer_public_keys: HashMap::new(),
             server_address,
             saved_session,
+            nickname: None,
+            nickname_cache: std::collections::HashMap::new(),
         };
 
         state.load_history().await?;

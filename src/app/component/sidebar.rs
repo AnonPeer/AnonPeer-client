@@ -9,7 +9,6 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     let my_name = model.state.username.as_deref().unwrap_or("Аноним");
     let chats = &model.state.chats;
     let selected = model.selected_chat.as_ref();
-    
     let mut col = Column::new().spacing(12).padding(16).height(Length::Fill);
 
     col = col.push(row![
@@ -26,26 +25,23 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .size(14)
         .width(Length::Fill)
         .style(styles::modern_text_input())
-        .into();
+        .into(); 
     col = col.push(search_input);
 
     if !model.search_matches.is_empty() {
         let mut dropdown = Column::new().spacing(2).padding(4);
-        for name in &model.search_matches {
-            let name_owned = name.clone(); 
-            
-            let display_name = if name.contains('@') {
-                name.clone()
-            } else {
-                name.clone()
-            };
+        for user_info in &model.search_matches {
+
+            let display_name = format!("{} (@{})", user_info.nickname, user_info.username);
+
+            let username_for_chat = user_info.username.clone(); 
             
             dropdown = dropdown.push(
                 button(text(display_name).size(14).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT))
                     .width(Length::Fill)
                     .padding([8, 12])
                     .style(styles::surface_button())
-                    .on_press(UiMessage::SearchResultSelected(name_owned))
+                    .on_press(UiMessage::SearchResultSelected(username_for_chat))
             );
         }
         col = col.push(
@@ -56,7 +52,7 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
     }
 
     col = col.push(Space::with_height(8));
-    
+
     col = col.push(
         button(row![
             text("").size(18),
@@ -68,7 +64,7 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
         .style(styles::accent_button())
         .on_press(UiMessage::OpenNewChatScreen)
     );
-    
+
     col = col.push(Space::with_height(8));
     col = col.push(text("Чаты").size(12).style(styles::muted_text()).shaping(iced::widget::text::Shaping::Advanced));
 
@@ -88,18 +84,18 @@ pub fn view<'a>(model: &'a Model) -> Element<'a, UiMessage> {
                     container(text(first).size(16).shaping(iced::widget::text::Shaping::Advanced))
                         .center_x(36).center_y(36)
                         .style(move |_| container::Style { 
-                            background: Some(iced::Background::Color(if is_selected { colors::ACCENT } else { colors::SURFACE })),
-                            text_color: Some(colors::TEXT_LIGHT),
+                             background: Some(iced::Background::Color(if is_selected { colors::ACCENT } else { colors::SURFACE })),
+                            text_color: Some(colors::TEXT_LIGHT), 
                             border: Border { radius: 18.0.into(), width: 0.0, color: iced::Color::TRANSPARENT },
                             ..Default::default()
                         }),
-                    Space::with_width(12),
+                     Space::with_width(12),
                     text(chat).size(14).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT)
                 ].align_y(Alignment::Center))
-                .width(Length::Fill)
+                 .width(Length::Fill)
                 .padding([10, 12])
                 .style(move |_, _| button::Style {
-                    background: Some((if is_selected { colors::SURFACE } else { iced::Color::TRANSPARENT }).into()),
+                    background: Some((if is_selected { colors::SURFACE }  else { iced::Color::TRANSPARENT }).into()),
                     text_color: colors::TEXT_LIGHT,
                     border: Border { radius: 10.0.into(), width: 0.0, color: iced::Color::TRANSPARENT },
                     ..Default::default()

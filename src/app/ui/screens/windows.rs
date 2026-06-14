@@ -8,15 +8,23 @@ use crate::state::Screen;
 use crate::EMOJI_FONT;
 
 pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
+    
+
+        
     let base_layout = match &model.state.screen {
         Screen::MainMenu { .. } => view_welcome(model),
-        Screen::AuthForm { is_register, username, password, .. } => {
-            view_auth(model, *is_register, username.as_str(), password.as_str())
+        Screen::AuthForm { is_register, nickname, username, password, .. } => {
+            view_auth(model, *is_register, nickname.as_str(), username.as_str(), password.as_str())
         }
+        Screen::UserProfile { username } => view_profile(model, username.as_str()),
         _ => view_app_shell(model),
     };
 
     let mut final_view = base_layout;
+
+
+
+
 
     if model.show_settings {
         let dimmer = button(row![])
@@ -41,6 +49,12 @@ pub fn view_screen<'a>(model: &'a Model) -> Element<'a, UiMessage> {
             let cache = model.image_cache.read().unwrap();
             cache.get(&img_id).cloned()
         };
+
+
+
+
+
+
 
         if let Some(handle) = handle_opt {
             let img_dimmer = button(row![])
@@ -265,9 +279,8 @@ fn view_welcome<'a>(_model: &'a Model) -> Element<'a, UiMessage> {
     .into()
 }
 
-fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -> Element<'a, UiMessage> {
+fn view_auth<'a>(model: &'a Model, is_reg: bool, nickname: &'a str, user: &'a str, pass: &'a str) -> Element<'a, UiMessage> {
     let title = if is_reg { "Регистрация нового профиля" } else { "Авторизация" };
-    
     let status_color = if model.state.status.starts_with("Ошибка") || model.state.status.starts_with("Заполните") {
         iced::Color::from_rgb(0.9, 0.3, 0.3) 
     } else if model.state.status.is_empty() {
@@ -276,11 +289,24 @@ fn view_auth<'a>(model: &'a Model, is_reg: bool, user: &'a str, pass: &'a str) -
         iced::Color::from_rgb(0.3, 0.8, 0.3) 
     };
 
+    let nickname_field = if is_reg {
+        column![
+            text("Отображаемое имя (может повторяться)").size(12).style(styles::muted_text()),
+            text_input("Введите никнейм", nickname)
+                .on_input(UiMessage::AuthNicknameChanged)
+                .padding(10),
+            Space::with_height(12),
+        ]
+    } else {
+        column![]
+    };
+
     container(column![
         text(title).size(20),
         Space::with_height(16),
-        text("Имя пользователя").size(12).style(styles::muted_text()),
-        text_input("Введите логин", user)
+        nickname_field, 
+        text("Уникальный логин (не повторяется)").size(12).style(styles::muted_text()),
+        text_input("Введите логин (username)", user)
             .on_input(UiMessage::AuthUsernameChanged)
             .padding(10),
         Space::with_height(12),
@@ -422,4 +448,39 @@ fn view_empty<'a>() -> Element<'a, UiMessage> {
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into()
+}
+
+
+fn view_profile<'a>(model: &'a Model, username: &'a str) -> Element<'a, UiMessage> {
+    let nickname = model.state.nickname_cache.get(username).cloned().unwrap_or_else(|| "Загрузка...".to_string());
+    
+    container(column![
+        row![
+            button(text("← Назад").size(14))
+                .padding([10, 20])
+                .style(styles::surface_button())
+                .on_press(UiMessage::CloseProfile),
+            Space::with_width(Length::Fill),
+        ],
+        Space::with_height(40),
+        container(
+            column![
+                text(nickname).size(28).shaping(iced::widget::text::Shaping::Advanced).font(EMOJI_FONT),
+                text(format!("@{}", username)).size(16).style(styles::muted_text()),
+                Space::with_height(20),
+                button(text("Написать сообщение").size(14))
+                    .padding([12, 24])
+                    .style(styles::accent_button())
+                    .on_press(UiMessage::ChatSelected(username.to_string())),
+            ]
+            .align_x(Alignment::Center)
+        )
+        .padding(40)
+        .style(styles::surface_container())
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .center_x(Length::Fill)
+    .center_y(Length::Fill)
+    .into()
 }

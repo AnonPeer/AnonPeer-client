@@ -2,7 +2,7 @@ use futures_util::{StreamExt, SinkExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
 use shared::errors::AnonError;
-use shared::protocol::{ClientPayload, ServerPayload, AppMessage};
+use shared::protocol::{ClientPayload, ServerPayload, AppMessage, UserInfo};
 
 #[derive(Debug, Clone)]
 pub enum ServerEvent {
@@ -11,20 +11,20 @@ pub enum ServerEvent {
     NewMessage(AppMessage),
     PeerKeys { target: String, ed_public: Vec<u8>, x25519_public: Vec<u8> },
     Disconnect,
-    UserSearchResult { username: String, exists: bool },
-    SearchResults(Vec<String>),
+    SearchResults(Vec<UserInfo>), // <-- ДОЛЖНО БЫТЬ Vec<UserInfo>
+    ProfileReceived(UserInfo),
 }
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
-    Register(String, String, Vec<u8>, Vec<u8>),
+    Register(String, String, String, Vec<u8>, Vec<u8>), // <-- 5 аргументов: nickname, username, password, ed, x25519
     Login(String, String, Vec<u8>, Vec<u8>),
     Send(AppMessage),
     FetchPeerKeys(String),
     UpdateServerAddress(String),
-    SearchUser(String),
     SearchPrefix(String),
     ValidateSession(String),
+    RequestProfile(String),
 }
 
 pub async fn connect(
@@ -34,7 +34,6 @@ pub async fn connect(
     mut cmd_rx: mpsc::UnboundedReceiver<ClientCommand>
 ) -> Result<(), AnonError> {
     let mut current_url = initial_url.to_string();
-
     loop {
         let (ws_stream, _) = match connect_async(&current_url).await {
             Ok(v) => v,
@@ -46,9 +45,7 @@ pub async fn connect(
                             current_url = new_url;
                             continue;
                         }
-                        _ => {
-                            continue;
-                        }
+                        _ => continue,
                     }
                 }
                 break;
@@ -71,27 +68,21 @@ pub async fn connect(
                                 ServerPayload::AuthErr(reason) => {
                                     let _ = tx_clone.send(ServerEvent::AuthErr(reason));
                                 }
-
                                 ServerPayload::Forward { msg } => {
                                     let _ = tx_clone.send(ServerEvent::NewMessage(msg));
                                 }
                                 ServerPayload::PeerKeys { target, ed_public, x25519_public } => {
                                     let _ = tx_clone.send(ServerEvent::PeerKeys { target, ed_public, x25519_public });
                                 }
-
-
-                                ServerPayload::UserSearchResult { username, exists } => {
-                                    let _ = tx_clone.send(ServerEvent::UserSearchResult { username, exists });
-                                }
-
-
                                 ServerPayload::SearchResults { matches } => {
                                     let _ = tx_clone.send(ServerEvent::SearchResults(matches));
                                 }
-
-
+                                ServerPayload::ProfileResult { user } => {
+                                    if let Some(u) = user {
+                                        let _ = tx_clone.send(ServerEvent::ProfileReceived(u));
+                                    }
+                                }
                             }
-
                         }
                     }
                     Ok(WsMessage::Close(_)) | Err(_) => {
@@ -108,16 +99,16 @@ pub async fn connect(
         let send_task = tokio::spawn(async move {
             while let Some(cmd) = internal_rx.recv().await {
                 let payload = match cmd {
-                    ClientCommand::Register(u, p, ep, xp) => 
-                        ClientPayload::Register { username: u, password: p, ed_public: ep, x25519_public: xp },
+                    ClientCommand::Register(nick, u, p, ep, xp) => 
+                        ClientPayload::Register { nickname: nick, username: u, password: p, ed_public: ep, x25519_public: xp },
                     ClientCommand::Login(u, p, ep, xp) => 
                         ClientPayload::Login { username: u, password: p, ed_public: ep, x25519_public: xp },
                     ClientCommand::Send(msg) => ClientPayload::SendMessage { msg },
                     ClientCommand::FetchPeerKeys(t) => ClientPayload::RequestKeys { target: t },
                     ClientCommand::UpdateServerAddress(_) => unreachable!(),
-                    ClientCommand::SearchUser(u) => ClientPayload::SearchUser { username: u },
-                    ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p }, <--
+                    ClientCommand::SearchPrefix(p) => ClientPayload::SearchPrefix { prefix: p },
                     ClientCommand::ValidateSession(session_id) => ClientPayload::ValidateSession { session_id }, 
+                    ClientCommand::RequestProfile(username) => ClientPayload::RequestProfile { username },
                 };
                 if let Ok(json) = serde_json::to_string(&payload) {
                     if ws_sender.send(WsMessage::Text(json)).await.is_err() {

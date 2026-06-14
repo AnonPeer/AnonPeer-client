@@ -25,10 +25,11 @@ pub struct Model {
     pub search_found: bool,
     pub search_result: Option<(String, bool)>,
     pub search_query: String,
-    pub search_matches: Vec<String>,
+    pub search_matches: Vec<shared::protocol::UserInfo>,
     pub image_cache: Arc<RwLock<HashMap<Uuid, ImageHandle>>>,
     pub decrypted_cache: Arc<RwLock<HashMap<Uuid, Arc<Result<MessageContent, String>>>>>,
     pub expanded_image_id: Option<Uuid>,
+
 }
 
 impl Model {
@@ -55,11 +56,10 @@ impl Model {
             search_query: String::new(),
             search_found: false,
             search_result: None,
-            search_matches: Vec::new(),
+            search_matches: Vec::new(), 
             image_cache: Arc::new(RwLock::new(HashMap::new())),
             decrypted_cache: Arc::new(RwLock::new(HashMap::new())),
             expanded_image_id: None,
-
         }
     }
 
@@ -71,6 +71,7 @@ impl Model {
             MainMenuSelect(idx) => {
                 self.state.screen = crate::state::Screen::AuthForm { 
                     is_register: idx == 1, 
+                    nickname: String::new(), 
                     username: String::new(), 
                     password: String::new(), 
                     focused: crate::state::FocusedField::Username 
@@ -79,6 +80,29 @@ impl Model {
                 Task::none()
             }
 
+
+
+
+
+            UiMessage::ViewProfile(username) => {
+                self.state.screen = crate::state::Screen::UserProfile { username: username.clone() };
+                let _ = self.cmd_tx.send(ClientCommand::RequestProfile(username));
+                Task::none()
+            }
+            UiMessage::ProfileReceived(_user) => {
+                Task::none()
+            }
+            UiMessage::CloseProfile => {
+                self.state.screen = crate::state::Screen::ChatList;
+                Task::none()
+            }
+
+
+
+
+
+
+
             UiMessage::ExpandImage(id) => {
                 self.expanded_image_id = Some(id);
                 Task::none()
@@ -86,6 +110,20 @@ impl Model {
             UiMessage::CloseExpandedImage => {
                 self.expanded_image_id = None;
                 Task::none()
+            }
+
+
+
+
+
+
+
+
+            UiMessage::AuthNicknameChanged(v) => { 
+                if let crate::state::Screen::AuthForm { nickname, .. } = &mut self.state.screen { 
+                    *nickname = v; 
+                } 
+                Task::none() 
             }
 
             AuthUsernameChanged(v) => { 
@@ -100,7 +138,46 @@ impl Model {
                 } 
                 Task::none() 
             }
-            AuthSubmit => self.auth_submit(),
+
+            
+
+
+
+
+            AuthSubmit => { 
+                if let crate::state::Screen::AuthForm { is_register, nickname, username, password, .. } = &self.state.screen {
+                    if username.trim().is_empty() || password.trim().is_empty() || (*is_register && nickname.trim().is_empty()) {
+                        self.state.status = "Заполните все поля!".into();
+                        return Task::none();
+                    }
+                    
+                    let cmd = if *is_register {
+                        ClientCommand::Register(
+                            nickname.clone(), 
+                            username.clone(), 
+                            password.clone(), 
+                            self.state.ed_public.clone(), 
+                            self.state.x25519_public.clone()
+                        )
+                    } else {
+                        ClientCommand::Login(
+                            username.clone(), 
+                            password.clone(), 
+                            self.state.ed_public.clone(), 
+                            self.state.x25519_public.clone()
+                        )
+                    };
+                    let _ = self.cmd_tx.send(cmd);
+                    self.state.status = "Запрос отправлен...".into();
+                }
+                Task::none() 
+            }
+
+
+
+
+
+
             AuthTogglePasswordVisibility => { 
                 self.password_visible = !self.password_visible; 
                 Task::none() 
@@ -117,6 +194,12 @@ impl Model {
                 self.state.chats.sort();
             }
 
+
+
+
+
+
+
             self.selected_chat = Some(t.clone());
             self.state.screen = crate::state::Screen::ChatView { 
                 target: t.clone(), 
@@ -126,6 +209,14 @@ impl Model {
             if !self.state.peer_keys.contains_key(&t) { 
                 let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(t.clone())); 
             }
+
+
+            if !self.state.nickname_cache.contains_key(&t) {
+                let _ = self.cmd_tx.send(ClientCommand::RequestProfile(t.clone()));
+            }
+
+
+
             scrollable::scroll_to(self.scroll_id.clone(), scrollable::AbsoluteOffset { x: 0.0, y: f32::MAX })
         }
 
@@ -315,10 +406,11 @@ impl Model {
         match ev {
             AuthOk(sid) => {
                 self.state.session_id = Some(sid.clone());
-                
-                if let crate::state::Screen::AuthForm { username, .. } = &self.state.screen { 
+                if let crate::state::Screen::AuthForm { username, nickname, .. } = &self.state.screen { 
                     self.state.username = Some(username.clone()); 
+                    self.state.nickname = Some(nickname.clone()); // <-- ДОБАВЛЕНО
                     self.state.save_local_session(username.clone(), sid.clone());
+                
                 } else if let Some((saved_user, _)) = &self.state.saved_session {
                     self.state.username = Some(saved_user.clone());
                 }
@@ -338,8 +430,20 @@ impl Model {
                 }
                 Task::none()
             }
-            UserSearchResult { username, exists } => Task::done(UiMessage::SearchResult { username, exists }),
- 
+   
+
+
+
+            ServerEvent::ProfileReceived(user) => {
+                return Task::done(UiMessage::ProfileReceived(user));
+            }
+
+
+
+
+
+
+
             NewMessage(mut msg) => {
                 msg.timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -361,9 +465,15 @@ impl Model {
                     self.state.chats.sort();
                     should_update = true;
                 }
-                
+
                 if !self.state.peer_keys.contains_key(&msg.from) { 
                     let _ = self.cmd_tx.send(ClientCommand::FetchPeerKeys(msg.from.clone())); 
+                }
+
+
+
+                if !self.state.nickname_cache.contains_key(&msg.from) {
+                    let _ = self.cmd_tx.send(ClientCommand::RequestProfile(msg.from.clone()));
                 }
 
                 let sender = msg.from.clone();
@@ -403,25 +513,31 @@ impl Model {
                 self.state.cache_peer_keys(target.clone(), ed_public.clone(), x25519_public.clone());
                 Task::done(UiMessage::KeysReceived { target, ed_public, x25519_public })
             }
+
+
+
+
+
+
+
             SearchResults(matches) => {
-                let mut unique_matches: Vec<String> = matches.into_iter().collect();
-                unique_matches.sort();
-                unique_matches.dedup();
-                
-                Task::done(UiMessage::SearchResultsReceived(unique_matches))
+                self.search_matches = matches;
+                Task::none()
             }
         }
     }
 
     fn auth_submit(&mut self) -> Task<UiMessage> {
-        if let crate::state::Screen::AuthForm { is_register, username, password, .. } = &self.state.screen {
-            if username.trim().is_empty() || password.trim().is_empty() {
+
+        if let crate::state::Screen::AuthForm { is_register, nickname, username, password, .. } = &self.state.screen {
+            if username.trim().is_empty() || password.trim().is_empty() || (*is_register && nickname.trim().is_empty()) {
                 self.state.status = "Заполните все поля!".into();
                 return Task::none();
             }
             
             let cmd = if *is_register {
                 ClientCommand::Register(
+                    nickname.clone(),
                     username.clone(), 
                     password.clone(), 
                     self.state.ed_public.clone(), 

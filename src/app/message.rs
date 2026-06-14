@@ -1,9 +1,27 @@
 use crate::network::ServerEvent;
+use shared::protocol::UserInfo; 
 
 #[derive(Debug, Clone)]
 pub enum UiMessage {
     Network(ServerEvent),
     Tick,
+
+
+
+
+
+
+    AuthNicknameChanged(String), 
+
+
+    ViewProfile(String),         
+    ProfileReceived(UserInfo),   
+    CloseProfile,                
+
+
+
+
+
 
     MainMenuSelect(usize),
     AuthUsernameChanged(String),
@@ -32,7 +50,7 @@ pub enum UiMessage {
     SearchResult { username: String, exists: bool },
 
     SearchResultSelected(String),
-    SearchResultsReceived(Vec<String>),
+    SearchResultsReceived(Vec<UserInfo>), 
 
     ExpandImage(uuid::Uuid),
     CloseExpandedImage,

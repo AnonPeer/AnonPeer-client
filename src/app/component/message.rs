@@ -1,4 +1,4 @@
-use iced::widget::{column, container, row, text, Space, Column};
+use iced::widget::{button, column, container, row, text, Space, Column};
 use iced::{Alignment, Element, Length};
 use shared::protocol::{AppMessage, MessageContent};
 use shared::crypto::decrypt_verify;
@@ -13,7 +13,6 @@ use std::sync::Arc;
 pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str) -> Element<'a, UiMessage> {
     let state = &model.state;
     let is_my = msg.from == my_username;
-    
     let time_str = chrono::Local.timestamp_opt(msg.timestamp as i64, 0)
         .single()
         .map(|d| d.format("%H:%M").to_string())
@@ -23,14 +22,22 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
     let sender_pub = state.get_sender_public_key(&msg.from);
 
     let mut msg_block = Column::new().spacing(4).height(Length::Shrink);
-    
     if !is_my {
+        let display_name = model.state.nickname_cache.get(&msg.from)
+            .cloned()
+            .unwrap_or_else(|| msg.from.clone());
+            
         msg_block = msg_block.push(
-            text(&msg.from)
+            button(text(display_name)
                 .size(12)
                 .style(|_| iced::widget::text::Style { color: Some(colors::ACCENT) })
                 .shaping(iced::widget::text::Shaping::Advanced)
-                .font(EMOJI_FONT)
+                .font(EMOJI_FONT))
+            .style(|_, _| iced::widget::button::Style {
+                background: Some(iced::Color::TRANSPARENT.into()),
+                ..Default::default()
+            })
+            .on_press(UiMessage::ViewProfile(msg.from.clone())) 
         );
     }
 
@@ -84,9 +91,6 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                 ].align_y(Alignment::End)
             );
         }
-
-
-
         Ok(MessageContent::Image { mime_type: _, base64_data }) => {
             let handle = {
                 let cache = model.image_cache.read().unwrap();
@@ -114,7 +118,7 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                     ..Default::default()
                 });
 
-            let clickable_img = iced::widget::button(styled_img)
+            let clickable_img = button(styled_img)
                 .style(|_, _| iced::widget::button::Style {
                     background: Some(iced::Color::TRANSPARENT.into()),
                     ..Default::default()
@@ -130,7 +134,6 @@ pub fn view_bubble<'a>(msg: &'a AppMessage, model: &'a Model, my_username: &str)
                     .shaping(iced::widget::text::Shaping::Advanced)
             );
         }
-
         Err(e) => {
             let err_text = match e.as_str() {
                 "keys" => "⏳ Ожидание ключей...",
