@@ -18,6 +18,7 @@ AnonPeer-client — это кроссплатформенное настольн
 ├── assets
 │   ├── fonts
 │   │   ├── NotoColorEmoji.ttf
+│   │   ├── NotoSans-Regular.ttf
 │   │   └── NotoSansSymbols-VariableFont_wght.ttf
 │   └── sounds
 │       └── notification.wav
@@ -38,16 +39,28 @@ AnonPeer-client — это кроссплатформенное настольн
     │   │   ├── colors.rs
     │   │   ├── mod.rs
     │   │   └── styles.rs
-    │   └── ui
-    │       ├── layout.rs
+    │   ├── ui
+    │   │   ├── layout.rs
+    │   │   ├── mod.rs
+    │   │   └── screens
+    │   │       ├── mod.rs
+    │   │       └── windows.rs
+    │   └── update
+    │       ├── auth.rs
+    │       ├── chat.rs
     │       ├── mod.rs
-    │       └── screens
-    │           ├── mod.rs
-    │           └── windows.rs
+    │       ├── network.rs
+    │       ├── profile.rs
+    │       └── ui.rs
+    ├── domain
+    │   ├── mod.rs
+    │   └── state.rs
     ├── ico.ico
+    ├── infrastructure
+    │   ├── db.rs
+    │   └── mod.rs
     ├── main.rs
-    ├── network.rs
-    └── state.rs
+    └── network.rs
 ```
 ## 🚀 Установка
 
