@@ -89,5 +89,9 @@ cargo run --release
 ```
 cargo run --release
 ```
+## Пожертвование
+если хотите материально поддержать нас в разработке AnonPeer то вот кошелек TonKeeper
+UQCwoRhoZ86qkjNIkj8E95tZTvaX_EkFdxhZXGfiXCxTsWha
+
 ## 📄 Лицензия
  Проект распространяется под лицензией MIT
